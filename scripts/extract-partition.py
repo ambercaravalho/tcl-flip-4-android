@@ -12,6 +12,7 @@ Usage:
 Example:
     scripts/extract-partition.py backups/flip4-full-emmc.img vbmeta_b build/vbmeta_b.img
 """
+import os
 import struct
 import sys
 
@@ -68,6 +69,8 @@ def main(argv):
         offset = first * SECTOR
         length = (last - first + 1) * SECTOR
         fh.seek(offset)
+        # SECURITY-REVIEW: CLI tool creating output directory for user-specified output path
+        os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
         with open(output, "wb") as out:
             remaining = length
             while remaining:

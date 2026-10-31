@@ -18,10 +18,15 @@ edl_config.json
 # Rooting work: carved/patched images + unpack trees (generated, can be huge)
 build/
 
-# Fetched build tools (avbtool, mkbootimg, test keys) - see docs/ROOT.md to refetch
+# Build / auxiliary tools: ignore compiled binaries and local scratch tools,
+# but keep our source tool and the vendored AOSP avbtool + test keys.
 tools/*
-# ...but keep our own source tool (built with libsepol; see docs/ROOT.md)
 !tools/setpermissive.c
+!tools/avb/
+tools/avb/*
+!tools/avb/avbtool.py
+!tools/avb/testkeys/
+!tools/avb/testkeys/*
 
 # Python caches
 __pycache__/

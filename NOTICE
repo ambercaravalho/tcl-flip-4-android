@@ -41,5 +41,14 @@ Acknowledgements
    Origin:   Community Android/EDL udev rules (as shipped with the original edl
              project). Provided for convenience on Linux hosts.
 
+4. AOSP avbtool and AVB test keys (vendored)
+   Location: tools/avb/avbtool.py, tools/avb/testkeys/
+   Upstream: https://android.googlesource.com/platform/external/avb
+   Author:   Copyright (C) 2016 The Android Open Source Project
+   License:  MIT / Apache License 2.0 (see header in tools/avb/avbtool.py)
+
+   Bundled directly so the AVB inspection and re-signing steps in docs/ROOT.md
+   work out of the box without a separate AOSP checkout.
+
 Everything else in this repository (scripts, docs) is provided under the
 repository's own LICENSE file unless noted otherwise.

@@ -53,7 +53,7 @@ root-critical specifics used below:
 - `odm` footer fingerprint (needed for `avbtool` props):
   `TCL/gflip5gtmo/pitti_32go:14/UKQ1.241125.001/jenkins12220921:user/test-keys`.
 
-## The key finding: AVB uses the public AOSP test key
+## The key finding: AVB uses public AOSP test keys
 
 `vbmeta` (and the `boot`/`recovery` chained descriptors) are signed with
 **`SHA256_RSA4096`**, and the public key **matches AOSP `testkey_rsa4096`**:
@@ -63,18 +63,31 @@ device vbmeta_b key sha256 : 7728e30f50bfa5cea165f473175a08803f6a8346642b5aa1091
 AOSP testkey_rsa4096       : 7728e30f50bfa5cea165f473175a08803f6a8346642b5aa10913e9d9e6defef6   (MATCH)
 ```
 
-Because the AVB root of trust is a **public** key we hold the private half of, we
-can re-sign modified images and the **locked** bootloader still accepts them - no
-unlock, no wipe, and verification can stay ON. This is what makes EDL-only root
-possible on this phone.
+In addition, as pointed out by [@ryjelsum](https://github.com/ryjelsum) in
+[Issue #3](https://github.com/ambercaravalho/tcl-flip-4-root/issues/3), the
+chained `vbmeta_system` partition (`SHA256_RSA2048`, key SHA1
+`cdbb77177f731920bbe0a0f94f84d9038ae0617d`) is **also** signed with a public
+AOSP test key - **`testkey_rsa2048`**:
+
+```
+device vbmeta_system_b key sha256 : 22de3994532196f61c039e90260d78a93a4c57362c7e789be928036e80b77c8c
+AOSP testkey_rsa2048              : 22de3994532196f61c039e90260d78a93a4c57362c7e789be928036e80b77c8c   (MATCH)
+```
+
+Because the entire AVB signing tree uses **public** keys whose private halves we
+hold (bundled in `tools/avb/testkeys/`), we can re-sign any AVB-verified
+partition and the **locked** bootloader still accepts it - no unlock, no wipe,
+and verification can stay ON. This is what makes EDL-only root possible on this
+phone.
 
 ### AVB chain map
 
 ```mermaid
 flowchart TD
     vb["vbmeta (top) - testkey_rsa4096"] -->|chain| boot["boot -> own footer (testkey_rsa4096)"]
-    vb -->|chain| rec["recovery -> own footer"]
-    vb -->|chain| vbs["vbmeta_system -> DIFFERENT key (cdbb7717)"]
+    vb -->|chain| rec["recovery -> own footer (testkey_rsa4096)"]
+    vb -->|chain| vbs["vbmeta_system -> testkey_rsa2048 (cdbb7717)"]
+    vbs -->|hashtree| sys["system / system_ext / product"]
     vb -->|hash desc| ib["init_boot"]
     vb -->|hash desc| vbt["vendor_boot"]
     vb -->|hash desc| dtbo["dtbo (no own footer)"]
@@ -82,10 +95,9 @@ flowchart TD
     vb -->|hashtree| odm["odm / vendor_dlkm / system_dlkm"]
 ```
 
-The `odm` hashtree descriptor lives in the **top `vbmeta`** (our key), so editing
-`odm` only requires re-signing `vbmeta` - not `vbmeta_system`.
-
-NOT ours: `vbmeta_system` (`system`/`system_ext`/`product`) - do not modify.
+The `odm` hashtree descriptor lives in the **top `vbmeta`** (`testkey_rsa4096`),
+so editing `odm` only requires re-signing `vbmeta` - we don't even need to touch
+`system` or `vbmeta_system`.
 
 ## Two facts that shaped the working approach
 
@@ -111,13 +123,19 @@ NOT ours: `vbmeta_system` (`system`/`system_ext`/`product`) - do not modify.
 
 ## Tooling
 
-Fetched into `tools/` (see `NOTICE`):
+Bundled in `tools/` (see [NOTICE](../NOTICE)):
 
 - `tools/avb/avbtool.py` - AOSP Android Verified Boot tool (re-sign / info).
-- `tools/avb/testkeys/testkey_rsa4096.pem` - AOSP test key (private half).
+- `tools/avb/testkeys/testkey_rsa4096.pem` - AOSP 4096-bit test key (private half, signs `vbmeta`, `boot`, `recovery`).
+- `tools/avb/testkeys/testkey_rsa2048.pem` - AOSP 2048-bit test key (private half, signs `vbmeta_system`).
 - `tools/setpermissive.c` - tiny `libsepol` tool: load a binary policy, mark
   **every type** permissive (via `permissive_map`), write it back. Build on
-  Linux: `cc -O2 -o setpermissive tools/setpermissive.c -l:libsepol.a`.
+  Linux (requires static `libsepol.a` from `libsepol-dev` on Debian/Ubuntu or
+  `libsepol` on Arch; `-lsepol` against the shared library will fail to link
+  because `policydb_*` symbols are internal):
+  ```bash
+  cc -O2 -o setpermissive tools/setpermissive.c -l:libsepol.a
+  ```
 
 Repo helpers:
 
@@ -139,6 +157,7 @@ Repo helpers:
 scripts/edl printgpt --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
 
 # Carve what we need from the full backup (offline)
+mkdir -p build
 scripts/extract-partition.py backups/flip4-full-emmc.img vbmeta_b build/vbmeta_b.img
 scripts/extract-partition.py backups/flip4-full-emmc.img super    build/super.img
 scripts/lp_extract.py --slot=1 build/super.img odm_b build/odm_b.img   # active slot = B = liblp slot 1
@@ -166,10 +185,11 @@ Two independent gates, both defeated by editing files that live in `odm`:
    ```
 
    Permissive SELinux does **not** change this; it is a separate runtime check.
-   On this unit `ro.debuggable=0`, set in **`/system/build.prop`** - which is on
-   `system`, chained to `vbmeta_system` (a key we do **not** hold). We never
-   touch it. Instead we exploit init's property load order (AOSP
-   `init/property_service.cpp`, `PropertyLoadBootDefaults`):
+   On this unit `ro.debuggable=0`, set in **`/system/build.prop`**. While we
+   could rebuild `system` (~633 MB) and re-sign `vbmeta_system` with
+   `testkey_rsa2048`, we never need to touch it. Instead we exploit init's
+   property load order (AOSP `init/property_service.cpp`,
+   `PropertyLoadBootDefaults`):
 
    > "The more the file is specific to a partition, the later it is loaded so
    > that its values override the previous ones."
@@ -177,27 +197,30 @@ Two independent gates, both defeated by editing files that live in `odm`:
    Files are merged into one map (last writer wins) in this order:
    `system` -> `system_ext` -> `vendor` -> `vendor_dlkm` -> `odm_dlkm` ->
    **`odm`** -> `product`. So `ro.debuggable=1` placed in
-   **`/odm/etc/build.prop`** overrides `system`'s `0` - using only the `odm`
-   partition we already re-sign. (`product` loads later still, but doesn't set
-   `ro.debuggable`, so `odm` wins in practice.)
+   **`/odm/etc/build.prop`** overrides `system`'s `0` - using only the tiny
+   1.4 MB `odm` partition we already re-sign. (`product` loads later still, but
+   doesn't set `ro.debuggable`, so `odm` wins in practice.)
 
 ## Phase 2 - Build the permissive + debuggable `odm` + re-signed `vbmeta_b`
 
 All offline; nothing touches the phone. One `odm` image carries **both** edits.
 
 ```bash
+mkdir -p /work build
+
 # 1. Pull the precompiled policy out of the odm_b base and make ALL types permissive
 debugfs -R "dump /etc/selinux/precompiled_sepolicy /work/pp" build/odm_b.img
 ./setpermissive /work/pp /work/pp.permissive          # -> "made 2991 types permissive"
 
 # 2. Write the permissive policy back into a copy of the odm ext4 (fix owner/mode/xattr)
 cp build/odm_b.img build/odm_b-ext4.img
+printf 'u:object_r:sepolicy_file:s0\000' > /work/ctx.sp.bin
 debugfs -w -R "rm /etc/selinux/precompiled_sepolicy" build/odm_b-ext4.img
 debugfs -w -R "write /work/pp.permissive /etc/selinux/precompiled_sepolicy" build/odm_b-ext4.img
 debugfs -w -R "sif /etc/selinux/precompiled_sepolicy mode 0100644" build/odm_b-ext4.img
 debugfs -w -R "sif /etc/selinux/precompiled_sepolicy uid 0" build/odm_b-ext4.img
 debugfs -w -R "sif /etc/selinux/precompiled_sepolicy gid 0" build/odm_b-ext4.img
-debugfs -w -R "ea_set -f ctx.bin /etc/selinux/precompiled_sepolicy security.selinux" build/odm_b-ext4.img
+debugfs -w -R "ea_set -f /work/ctx.sp.bin /etc/selinux/precompiled_sepolicy security.selinux" build/odm_b-ext4.img
 
 # 2b. Enable adb root: append ro.debuggable=1 to odm's build.prop.
 #     Preserve its mode (0600), owner (0:0), and SELinux label
@@ -266,6 +289,7 @@ sectors on this unit (confirm on yours with `extract-partition.py --list` and th
 
 ```bash
 # Fresh EDL each session (key-combo while plugging USB -> clean 0x9008 / Sahara).
+mkdir -p backups/pre-flash
 
 # Pre-flash dumps (reversibility) + prove offsets are stock before writing:
 scripts/edl r  vbmeta_b backups/pre-flash/vbmeta_b.img --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
@@ -321,9 +345,12 @@ scripts/edl ws 3688448 backups/pre-flash/odm_b.img    --loader=loader/flip-4-edl
 the locked bootloader (AVB is enforced at boot, not at firehose level), so
 recovery is always available.
 
-## Out of scope / do not touch
+## Out of scope / not needed for this path
 
-- `vbmeta_system`, `system`, `system_ext`, `product` - chained to a key we do
-  **not** hold; modifying them fails verification.
+- `vbmeta_system`, `system`, `system_ext`, `product` - signed with AOSP
+  `testkey_rsa2048` (`tools/avb/testkeys/testkey_rsa2048.pem`), so they *can* be
+  modified and re-signed in the same way, but we leave them untouched here
+  because the 1.4 MB `odm` partition is sufficient for both permissive SELinux
+  and `adb root`.
 - Bootloader unlock / `fastboot` - locked on this unit, and unlocking would wipe
   userdata (the whole point of this path is to avoid that).

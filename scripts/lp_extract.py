@@ -5,11 +5,12 @@ Parses the LP metadata in a super image and can list logical partitions or
 extract one to a file (by concatenating its linear extents). Pure stdlib.
 
 Usage:
-    scripts/lp_extract.py <super.img> --list
-    scripts/lp_extract.py <super.img> <partition> <output>
+    scripts/lp_extract.py [--slot=N] <super.img> --list
+    scripts/lp_extract.py [--slot=N] <super.img> <partition> <output>
 
 Reference: system/core/fs_mgr/liblp (LpMetadata* structs).
 """
+import os
 import struct
 import sys
 
@@ -103,6 +104,8 @@ def main(argv):
         if match is None:
             raise SystemExit(f"error: logical partition '{target}' not found (try --list)")
         _, fei, ne = match
+        # SECURITY-REVIEW: CLI tool creating output directory for user-specified output path
+        os.makedirs(os.path.dirname(output) or ".", exist_ok=True)
         with open(output, "wb") as out:
             for k in range(ne):
                 num_sectors, ttype, tdata, tsource = extents[fei + k]

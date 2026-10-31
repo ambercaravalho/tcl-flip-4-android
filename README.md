@@ -116,14 +116,18 @@ full, exact procedure with offsets lives in [docs/ROOT.md](docs/ROOT.md).
 This worked on this specific device. It is not a promise it will work - or be
 safe - on another unit.
 
-## Why it's possible: AVB uses the public AOSP test key
+## Why it's possible: AVB uses public AOSP test keys
 
 `vbmeta` (and the chained `boot`/`recovery` descriptors) are signed with
-`SHA256_RSA4096`, and the public key **matches the AOSP `testkey_rsa4096`** whose
-private half is public. Because the verified-boot root of trust is a key we hold,
-we can re-sign modified images and the **locked** bootloader still accepts them -
-no unlock, no wipe, verification stays on. Full detail:
-[docs/ROOT.md](docs/ROOT.md).
+`SHA256_RSA4096` matching the public **AOSP `testkey_rsa4096`**, and the chained
+`vbmeta_system` (`system`/`system_ext`/`product`) is signed with `SHA256_RSA2048`
+matching the public **AOSP `testkey_rsa2048`** (thanks to
+[@ryjelsum](https://github.com/ryjelsum) in
+[Issue #3](https://github.com/ambercaravalho/tcl-flip-4-root/issues/3)). Because
+the entire verified-boot signing tree uses keys whose private halves are public
+(and bundled in `tools/avb/testkeys/`), we can re-sign modified images and the
+**locked** bootloader still accepts them - no unlock, no wipe, verification
+stays on. Full detail: [docs/ROOT.md](docs/ROOT.md).
 
 ## The device
 
@@ -135,7 +139,7 @@ no unlock, no wipe, verification stays on. Full detail:
 | EDL USB id | `05c6:9008` |
 | Storage | eMMC, 512-byte sectors, ~29.12 GiB (61,079,552 sectors) |
 | Layout | GPT, **A/B slots** (`_a`/`_b`), **Virtual A/B (VABC)**, `super`, `userdata`; active slot **B** |
-| AVB | signed with the public **AOSP `testkey_rsa4096`** (so re-signable) |
+| AVB | signed with public **AOSP `testkey_rsa4096`** (`vbmeta`) + **`testkey_rsa2048`** (`vbmeta_system`) |
 | Loader | `loader/flip-4-edl.bin` (firehose programmer, required) |
 
 ## How EDL / firehose works
