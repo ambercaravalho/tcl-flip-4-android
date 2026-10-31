@@ -15,7 +15,7 @@ logs/*
 # edl runtime cache (auto-generated; contains device serial)
 edl_config.json
 
-# Rooting work: carved/patched images + unpack trees (generated, can be huge)
+# Partition / image work: carved/patched images + unpack trees (generated, can be huge)
 build/
 
 # Build / auxiliary tools: ignore compiled binaries and local scratch tools,

@@ -1,5 +1,5 @@
-tcl-flip-4-root - NOTICE
-========================
+tcl-flip-4-android - NOTICE
+===========================
 
 This repository bundles third-party components. Their licenses and origins are
 listed below.
@@ -47,8 +47,10 @@ Acknowledgements
    Author:   Copyright (C) 2016 The Android Open Source Project
    License:  MIT / Apache License 2.0 (see header in tools/avb/avbtool.py)
 
-   Bundled directly so the AVB inspection and re-signing steps in docs/ROOT.md
-   work out of the box without a separate AOSP checkout.
+   Bundled directly so the AVB inspection and re-signing steps in
+   docs/PARTITIONS_AND_AVB.md work out of the box without a separate AOSP
+   checkout.
 
-Everything else in this repository (scripts, docs) is provided under the
+Everything else in this repository (scripts, docs, and prior research from
+https://github.com/ambercaravalho/tcl-flip-4-root) is provided under the
 repository's own LICENSE file unless noted otherwise.

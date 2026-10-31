@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Surgically patch one hashtree descriptor's root_digest in a signed vbmeta
-image, then re-sign, leaving every other descriptor byte-identical.
+or vbmeta_system image, then re-sign, leaving every other descriptor
+byte-identical.
 
-This is used to update ONLY the `odm` descriptor after making its precompiled
-SELinux policy permissive, without disturbing dtbo/init_boot/vendor_boot/vendor/
-system_dlkm/vendor_dlkm/chain descriptors (which the full-rebuild path cannot
-reproduce for hash-only partitions like dtbo).
+This is used to update individual verity descriptors (e.g., `system`,
+`system_ext`, `product` in `vbmeta_system` signed with `testkey_rsa2048.pem`,
+or `odm`, `vendor` in `vbmeta` signed with `testkey_rsa4096.pem`) without
+disturbing other hash/chain descriptors (such as `dtbo`, which has no
+standalone AVB footer).
 
 AVB signature == RSA-PKCS1v1.5(SHA256(header || aux)), which is exactly what
 `openssl dgst -sha256 -sign` produces, so we shell out to openssl for signing.

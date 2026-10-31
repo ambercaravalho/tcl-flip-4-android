@@ -1,7 +1,8 @@
 /*
  * setpermissive - load a binary SELinux policy, mark every type "permissive",
- * and write it back. Used to make the TCL Flip 4's precompiled_sepolicy fully
- * permissive offline (no Magisk), then re-sealed under AVB with the test key.
+ * and write it back. Used to make the TCL Flip 4 5G's precompiled_sepolicy
+ * fully permissive offline for Android bringup/debugging, then re-sealed under
+ * AVB with the AOSP test key.
  *
  * Build (Linux; requires static libsepol.a - `libsepol-dev` on Debian/Ubuntu,
  * `libsepol` on Arch):

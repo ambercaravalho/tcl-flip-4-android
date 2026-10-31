@@ -1,153 +1,132 @@
-# tcl-flip-4-root
+# tcl-flip-4-android
 
-**Experimental, no-wipe root for the TCL Flip 4 (T440W) over Qualcomm EDL** -
-make the phone fully SELinux-permissive and get an `adb root` (`uid=0`) shell,
-without unlocking the bootloader or wiping userdata.
+**Research and tooling for bringing full Android 14 to the TCL Flip 4 5G (T440W)** -
+replacing the KaiOS 4 userspace inside `super` while retaining the stock Android 14
+GKI kernel and Qualcomm vendor BSP, re-signed with the public AOSP test keys the
+device's locked bootloader already trusts.
+
+> **Looking only to root stock KaiOS 4 (`adb root` + permissive SELinux)?**
+> See the upstream repository: **[tcl-flip-4-root](https://github.com/ambercaravalho/tcl-flip-4-root)**.
 
 > ## Read this first - this is experimental and dangerous
 >
-> - This is **unofficial, experimental** reverse-engineering work that succeeded
->   on **one specific phone**. Nothing here is guaranteed to be safe on yours.
+> - This is **unofficial, experimental** reverse-engineering and OS bringup
+>   research conducted on **one specific phone**. Nothing here is guaranteed to
+>   be safe on yours.
 > - Writing to flash over EDL **can and may well PERMANENTLY BRICK your phone.**
 >   There is no warranty and no undo button.
 > - **Do your own research.** Understand each step before you run it. If a command
 >   doesn't make sense to you, stop.
 > - **ALWAYS MAKE A FULL, VERIFIED BACKUP BEFORE DOING ANYTHING** with
->   `scripts/backup.sh`. Every image we flash is carved from that backup and is
->   reversible - as long as the backup exists.
+>   `scripts/backup.sh`. Every image we inspect or patch is carved from that
+>   backup and is reversible - as long as the backup exists.
 >
 > You accept all risk. See [LICENSE](LICENSE): provided "as is", without warranty.
 
-Two ways to read this:
+---
 
-- **New here, or you just want to run the commands?** -> [Part 1: Just root it](#part-1-just-root-it).
-- **Want to understand how it works or adapt it?** -> [Part 2: How it works](#part-2-how-it-works-technical).
+## Project Goal & Technical Foundation
+
+Although the **TCL Flip 4 5G (model T440W, `gflip5gtmo` / `pitti_32go`)** ships
+with KaiOS 4, its underlying platform is a standard **Android 14 (SDK 34, Linux
+`6.1.90-android14`)** Treble/GKI architecture:
+
+1. **Android 14 GKI & Treble separation:**
+   - The boot chain (`boot`, `init_boot`, `vendor_boot`, `dtbo`) and hardware
+     support partitions (`vendor`, `odm`, `vendor_dlkm`, `system_dlkm`) are
+     standard Android 14 GKI / Qualcomm BSP images.
+   - The KaiOS 4 environment lives in the userspace dynamic partitions inside
+     `super` (`system`, `system_ext`, `product`).
+2. **AVB uses public AOSP test keys across the verification tree:**
+   - Top-level **`vbmeta`** (plus `boot` and `recovery` footers, and the
+     hashtree descriptors for `vendor`, `odm`, `vendor_dlkm`, `system_dlkm`) is
+     signed with `SHA256_RSA4096` matching the public **AOSP `testkey_rsa4096`**
+     (`tools/avb/testkeys/testkey_rsa4096.pem`).
+   - Chained **`vbmeta_system`** (covering the hashtree descriptors for
+     `system`, `system_ext`, and `product`) is signed with `SHA256_RSA2048`
+     matching the public **AOSP `testkey_rsa2048`**
+     (`tools/avb/testkeys/testkey_rsa2048.pem`, identified by
+     [@ryjelsum](https://github.com/ryjelsum) in
+     [tcl-flip-4-root#3](https://github.com/ambercaravalho/tcl-flip-4-root/issues/3)).
+3. **Locked-bootloader userspace / GSI bringup:**
+   Because the private halves of the device's AVB signing keys are public (and
+   bundled in `tools/avb/testkeys/`), we can replace or rebuild the userspace
+   partitions (`system`, `system_ext`, `product`) inside `super`, re-sign
+   `vbmeta_system` (and `vbmeta` when adjusting `odm`/`vendor`), and flash over
+   Qualcomm EDL - **without unlocking the bootloader or disabling Android
+   Verified Boot**.
+
+For the full partition architecture, AVB verification tree diagram, VABC notes,
+and offline inspection/signing commands, see
+**[docs/PARTITIONS_AND_AVB.md](docs/PARTITIONS_AND_AVB.md)**.
 
 ---
 
-# Part 1: Just root it
-
-For beginners and anyone who mostly wants to follow steps. Take it slow, and
-**do not skip the backup.**
-
-## What you get
-
-- **Full root over ADB** (`adb root` gives you a `uid=0` shell).
-- **SELinux fully permissive**, so root can actually do things (needed for the
-  KaiOS Firefox remote debugger, privileged app dev, etc.).
-- **No bootloader unlock and no data wipe** - your phone's contents stay intact,
-  and Android Verified Boot stays on.
-
-## Is this even your phone?
-
-This only applies to the **TCL Flip 4 / "Go Flip 5G", model T440W** (also called
-`gflip5gtmo` / `pitti_32go`). If your phone is a different model, **none of this
-applies** and following it may brick it. Check with `adb shell getprop ro.product.model`.
-
-## Honest expectations
-
-There is **no one-click root script.** The safe/easy part - installing the tools
-and making a backup - is scripted. The rooting itself is a careful, manual,
-multi-step procedure (it needs some Linux-side tools) and is written out
-step-by-step in **[docs/ROOT.md](docs/ROOT.md)**. Read that whole doc before you
-start.
-
-## Steps
-
-1. **Install the tools** (needs Python 3 and a data-capable USB cable; no drivers
-   on macOS):
-
-   ```bash
-   scripts/setup.sh
-   ```
-
-2. **Put the phone into EDL mode** (Qualcomm's low-level `05c6:9008` mode). If USB
-   debugging is on, the easiest is:
-
-   ```bash
-   adb reboot edl
-   ```
-
-   Other ways (key combo, test point) are in
-   [Entering EDL mode](#entering-edl-mode).
-
-3. **Confirm the phone is detected:**
-
-   ```bash
-   scripts/check-device.sh
-   ```
-
-4. **MAKE YOUR BACKUP. Do not skip this.** It dumps and verifies a full,
-   restorable image of the whole phone (~29 GiB, ~15 min):
-
-   ```bash
-   scripts/backup.sh
-   ```
-
-   Copy `backups/flip4-full-emmc.img` somewhere safe before going further.
-
-5. **Follow the root runbook:** **[docs/ROOT.md](docs/ROOT.md)**. It walks through
-   building the patched images and flashing them. Go carefully and verify each
-   read-back before you reboot.
-
-If anything looks wrong, **stop and do not reboot** - see
-[Troubleshooting](#troubleshooting) and the rollback section of
-[docs/ROOT.md](docs/ROOT.md).
-
----
-
-# Part 2: How it works (technical)
-
-For people who want to understand the mechanism or port it. This is denser; the
-full, exact procedure with offsets lives in [docs/ROOT.md](docs/ROOT.md).
-
-## What was achieved (on one unit)
-
-- Fully permissive SELinux (all 2991 policy types), observed on hardware:
-  `adb shell dmesg` works and the loaded policy reports `2991/2991` permissive.
-- **`adb root` returns `uid=0(root)`**, by making the build report
-  `ro.debuggable=1` (added to `/odm/etc/build.prop`, which overrides the `system`
-  value at init property-load time - no `system`/`vbmeta_system` edit).
-- Method: in **one** `odm` rebuild, edit `/odm/etc/selinux/precompiled_sepolicy`
-  **and** `/odm/etc/build.prop`, regenerate dm-verity, **surgically re-sign
-  `vbmeta_b`** with the AOSP test key, and flash the active slot over EDL (one
-  pass). No bootloader unlock, no userdata wipe, AVB still enforced.
-
-This worked on this specific device. It is not a promise it will work - or be
-safe - on another unit.
-
-## Why it's possible: AVB uses public AOSP test keys
-
-`vbmeta` (and the chained `boot`/`recovery` descriptors) are signed with
-`SHA256_RSA4096` matching the public **AOSP `testkey_rsa4096`**, and the chained
-`vbmeta_system` (`system`/`system_ext`/`product`) is signed with `SHA256_RSA2048`
-matching the public **AOSP `testkey_rsa2048`** (thanks to
-[@ryjelsum](https://github.com/ryjelsum) in
-[Issue #3](https://github.com/ambercaravalho/tcl-flip-4-root/issues/3)). Because
-the entire verified-boot signing tree uses keys whose private halves are public
-(and bundled in `tools/avb/testkeys/`), we can re-sign modified images and the
-**locked** bootloader still accepts them - no unlock, no wipe, verification
-stays on. Full detail: [docs/ROOT.md](docs/ROOT.md).
-
-## The device
+## The Device
 
 | Property | Value |
 |---|---|
-| Phone | TCL Flip 4 / "Go Flip 5G", model **T440W** (`gflip5gtmo` / `pitti_32go`) |
-| OS | **KaiOS 4 on Android 14** base, `user`/test-keys, SDK 34, kernel `6.1.90-android14` |
+| Phone | TCL Flip 4 5G / "Go Flip 5G", model **T440W** (`gflip5gtmo` / `pitti_32go`) |
+| Stock OS | **KaiOS 4 on Android 14** base, `user`/test-keys, SDK 34, kernel `6.1.90-android14` |
 | SoC | Qualcomm (HWID `0x002980e100420071`, MSM_ID `0x002980e1`) |
-| EDL USB id | `05c6:9008` |
+| EDL USB ID | `05c6:9008` |
 | Storage | eMMC, 512-byte sectors, ~29.12 GiB (61,079,552 sectors) |
 | Layout | GPT, **A/B slots** (`_a`/`_b`), **Virtual A/B (VABC)**, `super`, `userdata`; active slot **B** |
-| AVB | signed with public **AOSP `testkey_rsa4096`** (`vbmeta`) + **`testkey_rsa2048`** (`vbmeta_system`) |
-| Loader | `loader/flip-4-edl.bin` (firehose programmer, required) |
+| AVB Keys | Public **AOSP `testkey_rsa4096`** (`vbmeta`) + **`testkey_rsa2048`** (`vbmeta_system`) |
+| EDL Loader | `loader/flip-4-edl.bin` (signed firehose programmer, required) |
 
-## How EDL / firehose works
+---
 
-Qualcomm SoCs have a low-level recovery mode, **EDL** (USB `05c6:9008`). In EDL
-the chip speaks **Sahara**, whose only job is to accept a signed **firehose
-programmer** (a small ELF that runs on the phone). Once uploaded, you speak
-**firehose** (XML-over-USB) to read/write flash.
+## Repository Layout & Tooling
+
+- **`vendor/edlclient/`** & **`scripts/edl`** - Vendored, patched
+  [bkerler/edl](https://github.com/bkerler/edl) v3.62 that works reliably with
+  the Flip 4's firehose programmer (see [docs/PATCHES.md](docs/PATCHES.md)).
+- **`loader/flip-4-edl.bin`** - Signed Qualcomm/TCL firehose programmer for the
+  T440W.
+- **`tools/avb/`** - Vendored AOSP `avbtool.py` and the public AOSP test keys
+  (`testkey_rsa4096.pem`, `testkey_rsa2048.pem`, `testkey_rsa8192.pem`).
+- **`tools/setpermissive.c`** - `libsepol` utility to mark all SELinux types in
+  a binary `precompiled_sepolicy` permissive for bringup debugging.
+- **`scripts/extract-partition.py`** - Carve any GPT partition out of a full raw
+  eMMC dump offline (`--list` to inspect the GPT).
+- **`scripts/lp_extract.py`** - Inspect `super` `liblp` metadata and extract
+  logical partitions (`system_b`, `vendor_b`, `odm_b`, etc.) offline.
+- **`scripts/patch_vbmeta.py`** - Surgically update a hashtree descriptor's root
+  digest in `vbmeta` or `vbmeta_system` and re-sign with OpenSSL.
+- **`scripts/backup.sh`** / **`scripts/flash-partition.sh`** /
+  **`scripts/check-device.sh`** - Device detection, verified full-eMMC backup,
+  and guarded partition flashing with read-back verification.
+
+---
+
+## Getting Started (Setup & Full Backup)
+
+### 1. Install the host environment
+
+Requires Python 3 and a data-capable USB cable. On macOS there are **no drivers
+to install** - `libusb` (via `pyusb`) talks to the device directly.
+
+```bash
+scripts/setup.sh
+```
+
+This creates `.venv/`, installs `requirements.txt`, and verifies the vendored
+`edl` loads.
+
+**Linux only:** install the udev rules, then replug the phone:
+
+```bash
+sudo cp linux/51-edl.rules linux/50-android.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+### 2. Enter EDL mode (`05c6:9008`)
+
+Qualcomm SoCs expose a low-level Emergency Download mode (**EDL**, USB
+`05c6:9008`). In EDL the chip speaks **Sahara** to accept the signed firehose
+programmer (`loader/flip-4-edl.bin`), then speaks **firehose** (XML-over-USB)
+to read or write flash.
 
 ```mermaid
 flowchart LR
@@ -158,105 +137,87 @@ flowchart LR
     fh -->|"data"| host
 ```
 
-Two things are always required: the **loader** (`loader/flip-4-edl.bin`,
-provided) and a host tool that speaks Sahara + firehose - the vendored, patched
-`edl` in `vendor/edlclient/`.
-
-## The one rule: reads vs writes
-
-This loader needs different handling per direction. The scripts already do the
-right thing; if you call `edl` by hand:
-
-- **READ / dump** (`r`, `rs`, `printgpt`, backups): pass `--skipresponse`.
-- **WRITE** (`w`, `ws`, ...): do **NOT** pass `--skipresponse`, or the write
-  reports success but silently does not commit.
-
-Why, in detail: [docs/PATCHES.md](docs/PATCHES.md).
-
-## Setup
-
-Requires Python 3 and a data-capable USB cable. On macOS there are **no drivers
-to install** - libusb (via `pyusb`) talks to the device directly.
-
-```bash
-scripts/setup.sh
-```
-
-This creates `.venv/`, installs `requirements.txt`, and verifies the vendored
-`edl` loads. The tool is vendored and already patched (see
-[docs/PATCHES.md](docs/PATCHES.md)); recreating `.venv` never loses the fixes.
-
-**Linux only:** install the udev rules, then replug the phone:
-
-```bash
-sudo cp linux/51-edl.rules linux/50-android.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-## Entering EDL mode
-
-The phone must enumerate as USB **`05c6:9008`**. Easiest first:
-
+Ways to enter EDL mode (easiest first):
 1. **ADB** (if USB debugging is on): `adb reboot edl`
 2. **Fastboot** (if reachable): `fastboot oem edl`
 3. **Key combo:** power off fully, hold both volume keys while plugging in USB.
 4. **Test point:** short the labeled EDL test point to ground while connecting
    USB (last resort).
 
-Then confirm (on macOS, `system_profiler` often won't list 9008, so this asks
-libusb directly):
+Confirm the phone is visible to `libusb`:
 
 ```bash
 scripts/check-device.sh
 ```
 
-## Full backup (do this before anything else)
-
-With the phone in EDL mode:
+### 3. Make a full, verified eMMC backup (mandatory before any work)
 
 ```bash
-scripts/check-device.sh          # should detect the 9008 device
-scripts/backup.sh                # dumps + verifies backups/flip4-full-emmc.img
+scripts/backup.sh
 ```
 
-The full image is ~29 GiB (~15 min at ~35 MB/s) and is verified afterward
-(primary + backup GPT present, size 512-aligned). When done, **pull the battery
-for ~10s and power on** to leave EDL. For everything else (restore, per-partition,
-erase, raw sectors, slots, memory), see [docs/CAPABILITIES.md](docs/CAPABILITIES.md).
+This dumps the entire ~29.12 GiB eMMC to `backups/flip4-full-emmc.img` (~15 min
+at ~35 MB/s) and verifies that both the primary and backup GPT headers are
+intact and 512-byte aligned. Copy `backups/flip4-full-emmc.img` to safe external
+storage before doing anything else. To exit EDL mode afterward, **pull the
+battery for ~10s and power on**.
+
+---
+
+## The One Operational Rule: Reads vs Writes
+
+This device's firehose loader requires different flags for reads vs writes. The
+helper scripts handle this automatically, but if you invoke `scripts/edl`
+directly:
+
+- **READ / dump** (`r`, `rs`, `rf`, `rl`, `printgpt`): pass **`--skipresponse`**.
+- **WRITE / erase** (`w`, `ws`, `wf`, `wl`, `e`): do **NOT** pass
+  `--skipresponse`, or the write reports success but silently does not commit.
+
+Always read back any written partition/sectors with `--skipresponse` and compare
+SHA-256 hashes before rebooting. Full explanation:
+[docs/PATCHES.md](docs/PATCHES.md).
+
+---
 
 ## Troubleshooting
 
-- **Hangs at "Trying to read first storage sector..."** - a read is missing
-  `--skipresponse`.
-- **A write "succeeded" but didn't stick** - you used `--skipresponse` on a
-  write; rerun without it and read back to verify.
-- **`check-device.sh` says NOT FOUND** - not in EDL, charge-only cable, or behind
-  a hub. Re-enter EDL and use a direct port.
-- **Everything hangs after you killed a command** - killing `edl` mid-transfer
-  leaves the loader stale (`Sahara error`). Pull the battery ~10s, re-enter EDL.
-  One clean command per session is safest.
-- **`reset` doesn't reboot** - known for this loader; pull the battery and power
-  on.
+- **Hangs at "Trying to read first storage sector..."** - a read command is
+  missing `--skipresponse`.
+- **A write "succeeded" but didn't stick** - you passed `--skipresponse` on a
+  write; re-run without it and read back to verify.
+- **`check-device.sh` says NOT FOUND** - phone is not in EDL, cable is
+  charge-only, or connected through a hub. Re-enter EDL and use a direct port.
+- **Everything hangs after killing a command** - killing `edl` mid-transfer
+  leaves the loader in a stale Sahara/firehose state. Pull the battery for ~10s
+  and re-enter EDL.
+- **`reset` doesn't reboot** - known limitation of this loader; pull the battery
+  and power on.
 
-## Docs map
+---
 
-- **[docs/ROOT.md](docs/ROOT.md)** - the full EDL-only runbook for permissive
-  SELinux + `adb root` (exact offsets, rollback).
-- **[docs/CAPABILITIES.md](docs/CAPABILITIES.md)** - every firehose command the
-  loader exposes (backup, restore, erase, slots, raw sector I/O, memory).
-- **[docs/PATCHES.md](docs/PATCHES.md)** - what was fixed in the vendored `edl`,
-  and the one operational rule that matters (`--skipresponse`: reads yes, writes
-  no).
+## Documentation Map
 
-## Credits and license
+- **[docs/PARTITIONS_AND_AVB.md](docs/PARTITIONS_AND_AVB.md)** - Partition
+  architecture (`super`, GKI A/B, VABC), the AOSP test-key AVB chain (`vbmeta` +
+  `vbmeta_system`), offline carving/signing commands, and the Android
+  userspace/GSI bringup strategy.
+- **[docs/CAPABILITIES.md](docs/CAPABILITIES.md)** - Reference for every
+  firehose command the loader exposes (backup, restore, erase, slots, raw sector
+  I/O, memory).
+- **[docs/PATCHES.md](docs/PATCHES.md)** - What was fixed in the vendored `edl`,
+  and why `--skipresponse` must be used on reads and omitted on writes.
 
+---
+
+## Credits and License
+
+- Prior KaiOS 4 root research & tooling base:
+  **[tcl-flip-4-root](https://github.com/ambercaravalho/tcl-flip-4-root)**.
 - Inspired by and built on Ryjelsum's writeup,
-  [*Continuing my Qualcomm garbage addiction: QM215 KaiOS flip phones*](https://ryjelsum.me/homelab/qm215-kaios-flips/).
-  The `loader/flip-4-edl.bin` firehose programmer (the T440W loader extracted
-  from TCL vendor tooling) came from that work, and their notes on the
-  `TypeError: a bytes-like object` firehose bug pointed the way; the remaining
-  fixes here are revisions this specific phone needed (see
-  [docs/PATCHES.md](docs/PATCHES.md)).
+  [*Continuing my Qualcomm garbage addiction: QM215 KaiOS flip phones*](https://ryjelsum.me/homelab/qm215-kaios-flips/),
+  and their discovery that `vbmeta_system` uses `testkey_rsa2048`
+  ([tcl-flip-4-root#3](https://github.com/ambercaravalho/tcl-flip-4-root/issues/3)).
 - EDL tool: [bkerler/edl](https://github.com/bkerler/edl) (c) B. Kerler, GPLv3 -
   vendored, patched, and slimmed in `vendor/edlclient/` (see its `LICENSE`).
 - `loader/flip-4-edl.bin`: proprietary Qualcomm/TCL signed firehose programmer,

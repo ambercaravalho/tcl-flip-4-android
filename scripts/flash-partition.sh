@@ -4,7 +4,8 @@
 # Before writing, this ALWAYS dumps the current contents of the target partition
 # to backups/pre-flash/ so you can restore it, asks for explicit confirmation,
 # writes, then reads the partition back and compares sha256 to the image so you
-# know the write actually committed BEFORE you reboot. See docs/ROOT.md.
+# know the write actually committed BEFORE you reboot. See docs/PARTITIONS_AND_AVB.md
+# and docs/PATCHES.md.
 #
 # Usage: scripts/flash-partition.sh <partition> <image>
 #   e.g. scripts/flash-partition.sh vbmeta_b build/vbmeta_b-patched.img
