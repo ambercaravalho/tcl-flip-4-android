@@ -1,0 +1,41 @@
+# TCL Flip 4 5G (T440W) Android Key Layout for soc_matrix_keypad0
+#
+# Adapted from stock KaiOS /system/usr/keylayout/soc_matrix_keypad0.kl.
+# Replaces non-AOSP KaiOS key labels (MESSAGE, FAVORITE_CONTACTS) that cause
+# AOSP libinput KeyLayoutMap to reject the file, and maps the center OK key
+# (scancode 352) to DPAD_CENTER and softkeys to MENU / BACK.
+
+key 2       1
+key 3       2
+key 4       3
+key 5       4
+key 6       5
+key 7       6
+key 8       7
+key 9       8
+key 10      9
+key 11      0
+
+# Dedicated shortcut & clear keys
+key 30      ENVELOPE
+key 48      DEL
+key 138     CONTACTS
+
+# Softkeys (Left = Menu, Right = Back)
+key 139     MENU
+key 158     BACK
+
+# 5-way D-Pad & Call
+key 103     DPAD_UP
+key 108     DPAD_DOWN
+key 105     DPAD_LEFT
+key 106     DPAD_RIGHT
+key 352     DPAD_CENTER
+key 231     CALL
+
+# End / Power key on matrix
+key 116     ENDCALL             WAKE
+
+# Star / Pound
+key 522     STAR
+key 523     POUND

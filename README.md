@@ -90,10 +90,24 @@ and offline inspection/signing commands, see
   a binary `precompiled_sepolicy` permissive for bringup debugging.
 - **`scripts/extract-partition.py`** - Carve any GPT partition out of a full raw
   eMMC dump offline (`--list` to inspect the GPT).
-- **`scripts/lp_extract.py`** - Inspect `super` `liblp` metadata and extract
-  logical partitions (`system_b`, `vendor_b`, `odm_b`, etc.) offline.
-- **`scripts/patch_vbmeta.py`** - Surgically update a hashtree descriptor's root
-  digest in `vbmeta` or `vbmeta_system` and re-sign with OpenSSL.
+- **`scripts/inspect_ext4.py`** - Fast, pure-Python seek-based `ext4` inspector
+  (`ls`, `find`, `cat`, `dump`) that extracts files without root mount or
+  `debugfs`.
+- **`scripts/lp_extract.py`** & **`scripts/lp_make.py`** - Inspect `super`
+  `liblp` metadata, extract logical partitions, and build surgical or full
+  `super` metadata/images offline.
+- **`scripts/prepare_gsi.py`** - End-to-end offline GSI preparation pipeline:
+  unsparses an Android 14 `a64_bvN` GSI, verifies 32-bit ARM `/system/bin/init`,
+  patches keypad mappings (`Generic.kl` + `/odm/usr/keylayout/`), compiles a
+  merged permissive `precompiled_sepolicy` (`GSI + vendor + t440w_compat.cil`),
+  re-signs `vbmeta_b` and `vbmeta_system_b`, and builds surgical `super`
+  metadata.
+- **`scripts/patch_vbmeta.py`** - Surgically update a hashtree descriptor (`root_digest`,
+  `image_size`, `tree_offset`, `tree_size`, `salt`, `fec_*`) in `vbmeta` or
+  `vbmeta_system` and re-sign with OpenSSL.
+- **`device/t440w/`** - Extracted stock hardware reference files (`build.prop`,
+  `fstab.emmc`, VINTF manifests/matrices, kernel `ikconfig`, SELinux
+  compatibility CIL, and stock + Android-adapted `.kl` keypad layouts).
 - **`scripts/backup.sh`** / **`scripts/flash-partition.sh`** /
   **`scripts/check-device.sh`** - Device detection, verified full-eMMC backup,
   and guarded partition flashing with read-back verification.
@@ -198,6 +212,10 @@ SHA-256 hashes before rebooting. Full explanation:
 
 ## Documentation Map
 
+- **[docs/BRINGUP_NOTES.md](docs/BRINGUP_NOTES.md)** - Phase 1 hardware/software
+  findings (`a64` / `arm32_binder64` ABI, SELinux `b2g_34_0` bridge, physical
+  flip keypad `.kl` mappings, surgical `super` layout) and the Phase 2 EDL flash
+  and rollback runbook.
 - **[docs/PARTITIONS_AND_AVB.md](docs/PARTITIONS_AND_AVB.md)** - Partition
   architecture (`super`, GKI A/B, VABC), the AOSP test-key AVB chain (`vbmeta` +
   `vbmeta_system`), offline carving/signing commands, and the Android

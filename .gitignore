@@ -19,7 +19,7 @@ edl_config.json
 build/
 
 # Build / auxiliary tools: ignore compiled binaries and local scratch tools,
-# but keep our source tool and the vendored AOSP avbtool + test keys.
+# but keep our source tool and the vendored AOSP avbtool, test keys, and mkbootimg.
 tools/*
 !tools/setpermissive.c
 !tools/avb/
@@ -27,6 +27,8 @@ tools/avb/*
 !tools/avb/avbtool.py
 !tools/avb/testkeys/
 !tools/avb/testkeys/*
+!tools/mkbootimg/
+!tools/mkbootimg/*.py
 
 # Python caches
 __pycache__/

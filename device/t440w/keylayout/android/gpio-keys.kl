@@ -1,0 +1,13 @@
+# TCL Flip 4 5G (T440W) Android Key Layout for gpio-keys
+#
+# Adapted from stock KaiOS /system/usr/keylayout/gpio-keys.kl.
+# Replaces non-AOSP KaiOS key labels (FLIP, QD_CALL) with valid AOSP keycodes
+# so libinput loads the keymap cleanly.
+
+key 115   VOLUME_UP
+key 114   VOLUME_DOWN
+key 102   HOME
+key 528   FOCUS
+key 766   CAMERA
+key 252   WAKEUP
+key 212   ASSIST

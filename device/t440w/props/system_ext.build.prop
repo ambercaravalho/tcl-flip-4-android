@@ -1,0 +1,30 @@
+####################################
+# from generate-common-build-props
+# These properties identify this partition image.
+####################################
+ro.product.system_ext.brand=TCL
+ro.product.system_ext.device=gflip5gtmo
+ro.product.system_ext.manufacturer=TCL
+ro.product.system_ext.model=T440W
+ro.product.system_ext.name=gflip5gtmo
+ro.product.model_for_attestation=
+ro.product.brand_for_attestation=
+ro.product.name_for_attestation=
+ro.system_ext.build.date=Mon Dec 22 17:05:57 CST 2025
+ro.system_ext.build.date.utc=1766394357
+ro.system_ext.build.fingerprint=TCL/gflip5gtmo/gflip5gtmo:14/UKQ1.241125.001/jenkins12221705:user/test-keys
+ro.system_ext.build.id=UKQ1.241125.001
+ro.system_ext.build.tags=test-keys
+ro.system_ext.build.type=user
+ro.system_ext.build.version.incremental=eng.jenkin.20251222.170750
+ro.system_ext.build.version.release=14
+ro.system_ext.build.version.release_or_codename=14
+ro.system_ext.build.version.sdk=34
+####################################
+# from variable PRODUCT_SYSTEM_EXT_PROPERTIES
+####################################
+bluetooth.profile.sap.server.enabled=true
+persist.vendor.dpm.feature=0
+ro.telephony.sim_slots.count=2
+telephony.active_modems.max_count=2
+# end of file

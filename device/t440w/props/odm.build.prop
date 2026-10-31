@@ -1,0 +1,33 @@
+####################################
+# from generate-common-build-props
+# These properties identify this partition image.
+####################################
+ro.product.odm.brand=TCL
+ro.product.odm.device=pitti_32go
+ro.product.odm.manufacturer=TCL
+ro.product.odm.model=T440W
+ro.product.odm.name=gflip5gtmo
+ro.product.model_for_attestation=
+ro.product.brand_for_attestation=
+ro.product.name_for_attestation=
+ro.odm.product.cpu.abilist=armeabi-v7a,armeabi
+ro.odm.product.cpu.abilist32=armeabi-v7a,armeabi
+ro.odm.product.cpu.abilist64=
+ro.odm.build.date=Mon Dec 22 09:21:04 UTC 2025
+ro.odm.build.date.utc=1766395264
+ro.odm.build.fingerprint=TCL/gflip5gtmo/pitti_32go:14/UKQ1.241125.001/jenkins12220921:user/test-keys
+ro.odm.build.id=UKQ1.241125.001
+ro.odm.build.tags=test-keys
+ro.odm.build.type=user
+ro.odm.build.version.incremental=eng.jenkin.20251222.092324
+ro.odm.build.version.release=14
+ro.odm.build.version.release_or_codename=14
+ro.odm.build.version.sdk=34
+####################################
+# from variable ADDITIONAL_ODM_PROPERTIES
+####################################
+ro.vendor.qti.va_odm.support=1
+####################################
+# from variable PRODUCT_ODM_PROPERTIES
+####################################
+# end of file

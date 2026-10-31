@@ -166,13 +166,17 @@ down into stages is:
    - Keypad / flip-hinge input keylayouts (`.kl` / `.kcm`), display density, and
      audio routing configuration.
 4. **Stage 3 - Repacking `super` & Re-signing `vbmeta_system`:**
-   - Add AVB hashtree footers (`tools/avb/avbtool.py add_hashtree_footer`) to
-     the replacement `system` / `system_ext` / `product` images.
-   - Update `vbmeta_system_b` with the new root digests and sign it with
+   - Automated by `scripts/prepare_gsi.py` and `scripts/lp_make.py` (see
+     **[docs/BRINGUP_NOTES.md](BRINGUP_NOTES.md)** for the complete Phase 1
+     findings and Phase 2 EDL flash commands).
+   - Adds AVB hashtree footers (`tools/avb/avbtool.py add_hashtree_footer`) to
+     the replacement `system` and `odm` images.
+   - Updates `vbmeta_system_b` (`--from-image` to update `image_size`,
+     `tree_offset`, `tree_size`, and `root_digest`) and signs it with
      `tools/avb/testkeys/testkey_rsa2048.pem`.
-   - Repack `super` (or write to mapped extents if sizes fit) and flash via EDL
-     (always **without** `--skipresponse` on writes, followed by a read-back
-     SHA-256 verification before rebooting).
+   - Builds surgical `super` metadata (`scripts/lp_make.py --surgical`) and
+     flashes via EDL (always **without** `--skipresponse` on writes, followed by
+     a read-back SHA-256 verification before rebooting).
 
 ---
 
