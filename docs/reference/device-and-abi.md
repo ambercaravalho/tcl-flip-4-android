@@ -65,9 +65,27 @@ ODM supplies valid device keylayouts, and the GSI's `Generic.kl` is corrected
 for:
 
 - `352` -> `DPAD_CENTER`
-- `48` -> `DEL`
+- `48` -> `BACK`
 - `30` -> `ENVELOPE`
 - `138` -> `CONTACTS`
+
+The validated physical-keypad profile additionally maps:
+
+- matrix and PMIC `116` -> `HOME WAKE`;
+- left/right softkeys `139`/`158` -> inert `F1`/`F2`;
+- `231` remains `CALL`.
+
+The baked `org.tclflip4.keypadcursor` AccessibilityService consumes the
+reserved keys needed for global behavior. `CONTACTS` toggles a black-arrow
+cursor; the D-pad moves it, center clicks, and keys `139`/`231` page up/down
+only while cursor mode is active. `ENVELOPE` launches Messaging.
+
+TrebleDroid's `vndk.rc` copies `persist.sys.phh.mainkeys` to
+`qemu.hw.mainkeys`. Both must be `1` before framework startup to omit the
+unusable on-screen navigation bar. The ODM init hook enforces that ordering.
+
+Evidence:
+[`2026-11-01-09-physical-keypad-navigation.md`](../findings/2026-11-01-09-physical-keypad-navigation.md).
 
 ## Debugging caveat
 

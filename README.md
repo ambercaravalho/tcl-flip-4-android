@@ -125,11 +125,16 @@ tooling/scripts/backup.sh
 - The full-height driver and matching vbmeta are retained. A bounded ODM init
   helper now reapplies forced client composition during startup and exits after
   one minute. Normal reboot and SurfaceFlinger restart both passed.
+- Physical Back, Home, Messages, and a toggleable D-pad cursor now make the GSI
+  fully operable without touch. The cursor app is baked into system, reserved
+  softkeys are inert by default, and the on-screen navigation bar is disabled.
+- Android setup is complete. The keypad/cursor and stable-display profiles both
+  passed a final full-reboot gate.
 - Lineage testing overwrote Region A; metadata-only rollback is no longer
   sufficient.
 
-The persistent full-height/client-composition pair is now the display baseline.
-The next work can continue Android setup without another display change.
+The persistent display and physical-keypad profiles are now the device
+baseline.
 
 ## Credits and license
 

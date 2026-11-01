@@ -55,14 +55,21 @@ transaction `1008` during the first minute after each SurfaceFlinger start,
 then exits. It passed normal-reboot, SurfaceFlinger-restart, controlled-client,
 and Lineage Setup physical gates.
 
+The physical keypad profile is also persistent and Android setup is complete.
+Back, Home, and inert app-reserved softkeys are static keylayout mappings. A
+baked AccessibilityService supplies Messages and a toggleable D-pad cursor
+with click and conditional scrolling. The on-screen navigation bar is disabled
+through the early PHH mainkeys setting. The complete keypad, baked-app,
+navigation, reboot, and stable-display gates passed.
+
 Lineage testing used both free `super` regions and overwrote the old stock
 system sectors in Region A. A metadata-only rollback is no longer sufficient;
 restoring stock requires the full eMMC backup or the affected system sectors.
 
-The persistent full-height/client-composition pair is now the display baseline.
-The next device session can continue Lineage setup without another display
-change. Any future image rebuild must preserve both the full-height
-vendor-DLKM and the bounded ODM helper.
+The persistent full-height/client-composition and physical-keypad profiles are
+now the device baseline. Any future image rebuild must preserve the
+full-height vendor-DLKM, bounded ODM helper, keypad system package, final
+keylayouts, and early PHH mainkeys policy.
 
 ## Read this before device work
 
@@ -104,6 +111,7 @@ vendor-DLKM and the bounded ODM helper.
 - [`2026-11-01-06-spi-coalescing-control.md`](findings/2026-11-01-06-spi-coalescing-control.md)
 - [`2026-11-01-07-spi-full-height-client.md`](findings/2026-11-01-07-spi-full-height-client.md)
 - [`2026-11-01-08-persistent-client-composition.md`](findings/2026-11-01-08-persistent-client-composition.md)
+- [`2026-11-01-09-physical-keypad-navigation.md`](findings/2026-11-01-09-physical-keypad-navigation.md)
 
 Use [`findings/SESSION_TEMPLATE.md`](findings/SESSION_TEMPLATE.md) for the next
 session.

@@ -1,0 +1,11 @@
+# Enable the baked T440W physical-keypad accessibility service for user 0.
+service t440w_enable_keypad /system/bin/t440w-enable-keypad.sh
+    class late_start
+    user root
+    group root
+    seclabel u:r:su:s0
+    disabled
+    oneshot
+
+on property:sys.boot_completed=1
+    start t440w_enable_keypad

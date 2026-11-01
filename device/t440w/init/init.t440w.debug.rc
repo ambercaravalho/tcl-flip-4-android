@@ -9,6 +9,10 @@
 on post-fs-data
     setprop persist.sys.usb.config adb
     setprop persist.vendor.usb.config adb
+    # TrebleDroid's vndk.rc copies this PHH setting over qemu.hw.mainkeys.
+    # Set both before zygote/system_server starts so no virtual nav bar exists.
+    setprop persist.sys.phh.mainkeys 1
+    setprop qemu.hw.mainkeys 1
 
 on zygote-start
     setprop vendor.usb.use_gadget_hal 0

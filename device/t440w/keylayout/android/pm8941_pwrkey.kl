@@ -1,2 +1,4 @@
 # TCL Flip 4 5G (T440W) Android Key Layout for pm8941_pwrkey
-key 116   POWER                 WAKE
+# The physical End key is wired through this input device. The PMIC still
+# provides its hardware long-hold reset independently of Android key policy.
+key 116   HOME                  WAKE

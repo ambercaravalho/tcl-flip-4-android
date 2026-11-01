@@ -10,9 +10,11 @@ Given an Android 14 `a64` (`arm32_binder64`) GSI image (`.img`, `.img.xz`, or
      required by `init_boot` and 32-bit vendor HALs).
   3. Patches `/system/usr/keylayout/Generic.kl` in-place (preserving exact byte
      size so ext4 inode/block checksums stay untouched) to map the TCL Flip 4 5G
-     physical keypad scancodes (`352 -> DPAD_CENTER`, `48 -> DEL`,
+     physical keypad scancodes (`352 -> DPAD_CENTER`, `48 -> BACK`,
      `30 -> ENVELOPE`, `138 -> CONTACTS`).
-  4. Compiles a merged, 100% permissive SELinux policy (`precompiled_sepolicy`)
+  4. Embeds the signed T440W keypad-cursor AccessibilityService, its idempotent
+     boot enabler, and the early hardware-navigation policy.
+  5. Compiles a merged, 100% permissive SELinux policy (`precompiled_sepolicy`)
      combining the GSI's CIL policies (`plat` + `system_ext` + optional `product`),
      the TCL Flip 4 5G `vendor_b` CIL policies, and the KaiOS/QTI `_34_0`
      compatibility bridge (`t440w_compat.cil`), then populates
@@ -24,11 +26,11 @@ Given an Android 14 `a64` (`arm32_binder64`) GSI image (`.img`, `.img.xz`, or
        - optional USB-only diagnostics (`ro.debuggable`, ADB properties, and
          the legacy ConfigFS fallback);
        - a separately selected, opt-in display diagnostic profile.
-  5. Rebuilds the AVB hashtree footers on `odm_b_android.img` and
+  6. Rebuilds the AVB hashtree footers on `odm_b_android.img` and
      `system_b_android.img` (`--do_not_generate_fec`) and surgically re-signs:
        - `<out-dir>/vbmeta_b_android.img` (`testkey_rsa4096.pem`)
        - `<out-dir>/vbmeta_system_b_android.img` (`testkey_rsa2048.pem`)
-  6. Generates `<out-dir>/super_meta_android.img` via `tooling/scripts/lp_make.py --surgical`
+  7. Generates `<out-dir>/super_meta_android.img` via `tooling/scripts/lp_make.py --surgical`
      (mapping `product_b` and `system_ext_b` as zero-length so `first_stage_init`
      uses the GSI's internal `/system/product` and `/system/system_ext`).
 
@@ -42,6 +44,7 @@ import json
 import lzma
 import os
 import re
+import shlex
 import shutil
 import struct
 import subprocess
@@ -222,7 +225,13 @@ def patch_generic_kl_for_t440w(raw_kl_bytes):
     text = raw_kl_bytes.decode("utf-8")
 
     text, n1 = re.subn(r"^key\s+30\s+A\b", "key 30    ENVELOPE", text, count=1, flags=re.M)
-    text, n2 = re.subn(r"^key\s+48\s+B\b", "key 48    DEL", text, count=1, flags=re.M)
+    text, n2 = re.subn(
+        r"^key\s+48\s+(?:B|DEL)\b",
+        "key 48    BACK",
+        text,
+        count=1,
+        flags=re.M,
+    )
     text, n3 = re.subn(r"^#\s*key\s+138\s+.*$", "key 138   CONTACTS", text, count=1, flags=re.M)
     text, n4 = re.subn(r"^#\s*key\s+352\s+.*$", "key 352   DPAD_CENTER", text, count=1, flags=re.M)
 
@@ -245,6 +254,105 @@ def patch_generic_kl_for_t440w(raw_kl_bytes):
     if len(new_bytes) != orig_len:
         raise SystemExit(f"error: Generic.kl length {len(new_bytes)} != original {orig_len}")
     return new_bytes, (n1, n2, n3, n4)
+
+
+def inject_keypad_system_files(system_img, keypad_apk):
+    """Add the signed keypad APK and its idempotent boot enabler to system."""
+    sources = {
+        "/system/app/T440WKeypadCursor/T440WKeypadCursor.apk": keypad_apk,
+        "/system/bin/t440w-enable-keypad.sh": os.path.join(
+            REPO_ROOT, "device", "t440w", "init", "t440w-enable-keypad.sh"
+        ),
+        "/system/etc/init/init.t440w.keypad.rc": os.path.join(
+            REPO_ROOT, "device", "t440w", "init", "init.t440w.keypad.rc"
+        ),
+    }
+    for target, source in sources.items():
+        if not os.path.isfile(source):
+            raise SystemExit(f"error: missing keypad source for {target}: {source}")
+
+    with open(system_img, "rb") as image:
+        reader = Ext4Reader(image)
+        for target in sources:
+            try:
+                reader.resolve_path(target)
+            except FileNotFoundError:
+                continue
+            raise SystemExit(f"error: refusing to replace existing system path: {target}")
+
+    original_size = os.path.getsize(system_img)
+    image_dir = os.path.dirname(os.path.abspath(system_img))
+    image_name = os.path.basename(system_img)
+    with tempfile.TemporaryDirectory(prefix="t440w-keypad-system-") as work:
+        shutil.copyfile(keypad_apk, os.path.join(work, "T440WKeypadCursor.apk"))
+        shutil.copyfile(
+            sources["/system/bin/t440w-enable-keypad.sh"],
+            os.path.join(work, "t440w-enable-keypad.sh"),
+        )
+        shutil.copyfile(
+            sources["/system/etc/init/init.t440w.keypad.rc"],
+            os.path.join(work, "init.t440w.keypad.rc"),
+        )
+        with open(os.path.join(work, "ctx.system.bin"), "wb") as output:
+            output.write(b"u:object_r:system_file:s0\x00")
+        commands = [
+            "mkdir /system/app/T440WKeypadCursor",
+            "sif /system/app/T440WKeypadCursor mode 040755",
+            "sif /system/app/T440WKeypadCursor uid 0",
+            "sif /system/app/T440WKeypadCursor gid 0",
+            "ea_set -f /work/ctx.system.bin /system/app/T440WKeypadCursor security.selinux",
+            "write /work/T440WKeypadCursor.apk /system/app/T440WKeypadCursor/T440WKeypadCursor.apk",
+            "sif /system/app/T440WKeypadCursor/T440WKeypadCursor.apk mode 0100644",
+            "sif /system/app/T440WKeypadCursor/T440WKeypadCursor.apk uid 0",
+            "sif /system/app/T440WKeypadCursor/T440WKeypadCursor.apk gid 0",
+            "ea_set -f /work/ctx.system.bin /system/app/T440WKeypadCursor/T440WKeypadCursor.apk security.selinux",
+            "write /work/t440w-enable-keypad.sh /system/bin/t440w-enable-keypad.sh",
+            "sif /system/bin/t440w-enable-keypad.sh mode 0100755",
+            "sif /system/bin/t440w-enable-keypad.sh uid 0",
+            "sif /system/bin/t440w-enable-keypad.sh gid 0",
+            "ea_set -f /work/ctx.system.bin /system/bin/t440w-enable-keypad.sh security.selinux",
+            "write /work/init.t440w.keypad.rc /system/etc/init/init.t440w.keypad.rc",
+            "sif /system/etc/init/init.t440w.keypad.rc mode 0100644",
+            "sif /system/etc/init/init.t440w.keypad.rc uid 0",
+            "sif /system/etc/init/init.t440w.keypad.rc gid 0",
+            "ea_set -f /work/ctx.system.bin /system/etc/init/init.t440w.keypad.rc security.selinux",
+        ]
+        command_file = os.path.join(work, "debugfs.cmd")
+        with open(command_file, "w") as output:
+            output.write("\n".join(commands) + "\n")
+        image_in_container = f"/image/{image_name}"
+        shell_command = (
+            f"e2fsck -fy {shlex.quote(image_in_container)} >/dev/null"
+            f" && debugfs -w -f /work/debugfs.cmd {shlex.quote(image_in_container)} >/dev/null"
+            f" && e2fsck -fy {shlex.quote(image_in_container)} >/dev/null"
+        )
+        subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{image_dir}:/image",
+                "-v",
+                f"{work}:/work:ro",
+                "t440w-tools:local",
+                "sh",
+                "-c",
+                shell_command,
+            ],
+            check=True,
+        )
+
+    if os.path.getsize(system_img) != original_size:
+        raise SystemExit("error: keypad injection changed the raw system image size")
+    with open(system_img, "rb") as image:
+        reader = Ext4Reader(image)
+        for target, source in sources.items():
+            actual = reader.read_inode_data(reader.resolve_path(target))
+            with open(source, "rb") as expected_file:
+                expected = expected_file.read()
+            if actual != expected:
+                raise SystemExit(f"error: embedded keypad file mismatch: {target}")
 
 
 def calc_partition_size_for_avb(raw_img_size):
@@ -422,6 +530,10 @@ def build_odm_android_image(
             r = Ext4Reader(fh)
             bp = r.read_inode_data(r.resolve_path("/etc/build.prop")).decode("utf-8")
         extra_props = []
+        extra_props.extend([
+            "persist.sys.phh.mainkeys=1",
+            "qemu.hw.mainkeys=1",
+        ])
         if usb_diagnostics:
             extra_props.extend([
                 "ro.debuggable=1",
@@ -433,7 +545,17 @@ def build_odm_android_image(
         extra_props.extend(DISPLAY_PROFILES[display_profile])
         for ep in extra_props:
             key = ep.split("=", 1)[0]
-            if f"{key}=" not in bp:
+            if key in ("persist.sys.phh.mainkeys", "qemu.hw.mainkeys"):
+                bp = re.sub(
+                    rf"^{re.escape(key)}=.*$",
+                    ep,
+                    bp,
+                    count=1,
+                    flags=re.M,
+                )
+                if f"{key}=" not in bp:
+                    bp = bp.rstrip("\n") + "\n" + ep + "\n"
+            elif f"{key}=" not in bp:
                 bp = bp.rstrip("\n") + "\n" + ep + "\n"
         with open(f"{work}/build.prop", "w") as f:
             f.write(bp)
@@ -586,6 +708,11 @@ def main():
     ap.add_argument("--stock-vbmeta", default="artifacts/build/vbmeta_b.img", help="Stock vbmeta_b.img")
     ap.add_argument("--stock-vbmeta-system", default="artifacts/build/vbmeta_system_b.img", help="Stock vbmeta_system_b.img")
     ap.add_argument(
+        "--keypad-apk",
+        default="artifacts/build/keypad-cursor/keypad-cursor.apk",
+        help="Signed T440W keypad-cursor APK to embed in system",
+    )
+    ap.add_argument(
         "--usb-diagnostics",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -703,6 +830,10 @@ def main():
             "usb": args.usb_diagnostics,
             "display_profile": args.display_profile,
         },
+        "keypad": {
+            "apk": os.path.abspath(args.keypad_apk),
+            "apk_sha256": sha256_file(args.keypad_apk),
+        },
     }
     with open(os.path.join(args.out_dir, "build-manifest.json"), "w") as output:
         json.dump(manifest, output, indent=2, sort_keys=True)
@@ -713,6 +844,8 @@ def main():
     patched_kl, counts = patch_generic_kl_for_t440w(generic_kl)
     overwrite_ext4_file_same_size(sys_img, "/system/usr/keylayout/Generic.kl", patched_kl)
     print(f">> Patched /system/usr/keylayout/Generic.kl in-place for T440W keypad (subs={counts})")
+    inject_keypad_system_files(sys_img, args.keypad_apk)
+    print(">> Embedded T440W keypad cursor APK and boot enabler in system")
 
     # 4. Build odm_b_android.img with merged permissive precompiled_sepolicy, keylayouts, and debuggable props
     odm_out = os.path.join(args.out_dir, "odm_b_android.img")

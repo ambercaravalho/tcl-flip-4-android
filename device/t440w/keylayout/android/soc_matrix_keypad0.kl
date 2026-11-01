@@ -3,7 +3,8 @@
 # Adapted from stock KaiOS /system/usr/keylayout/soc_matrix_keypad0.kl.
 # Replaces non-AOSP KaiOS key labels (MESSAGE, FAVORITE_CONTACTS) that cause
 # AOSP libinput KeyLayoutMap to reject the file, and maps the center OK key
-# (scancode 352) to DPAD_CENTER and softkeys to MENU / BACK.
+# (scancode 352) to DPAD_CENTER. Softkeys use inert function-key codes so apps
+# can consume them without triggering Android policy actions.
 
 key 2       1
 key 3       2
@@ -16,14 +17,14 @@ key 9       8
 key 10      9
 key 11      0
 
-# Dedicated shortcut & clear keys
+# Dedicated shortcut & navigation keys
 key 30      ENVELOPE
-key 48      DEL
+key 48      BACK
 key 138     CONTACTS
 
-# Softkeys (Left = Menu, Right = Back)
-key 139     MENU
-key 158     BACK
+# App-reserved softkeys: recognized but no Android policy action
+key 139     F1
+key 158     F2
 
 # 5-way D-Pad & Call
 key 103     DPAD_UP
@@ -33,8 +34,8 @@ key 106     DPAD_RIGHT
 key 352     DPAD_CENTER
 key 231     CALL
 
-# End / Power key on matrix
-key 116     ENDCALL             WAKE
+# End key on matrix
+key 116     HOME                WAKE
 
 # Star / Pound
 key 522     STAR
