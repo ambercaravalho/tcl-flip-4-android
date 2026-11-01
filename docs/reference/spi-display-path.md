@@ -109,9 +109,9 @@ Evidence:
 and `../../evidence/captures/gsi-fullscreen-control/spi-one-key.txt`.
 
 The root/tracefs gate passes through the GSI's built-in Rooted debugging
-control. Prepared immutable, coalescing, full-height-client, and lower-clock
-profiles remain experiments, not confirmed fixes; each still requires a
-single-variable, hash-locked, read-back-verified test.
+control. Every module profile still requires same-state vbmeta derivation,
+hash locking, raw-LBA backup/write/read-back verification, and a recorded
+rollback.
 
 ## Immutable driver control
 
@@ -144,3 +144,50 @@ all untargeted descriptors before writing.
 Evidence:
 [`2026-11-01-05-spi-driver-control-selection.md`](../findings/2026-11-01-05-spi-driver-control-selection.md)
 and `../../evidence/captures/gsi-spi-immutable/spi-one-key.txt`.
+
+## Pending-counter coalescing control
+
+Clamping the driver's pending count to one reduced the controlled transition
+from five frame transfers to four for the same four framebuffer submissions.
+The physical output jumped and ended stale/corrupted while Android's screenshot
+remained correct.
+
+The worker consumes pending as soon as the first plane update wakes it. Later
+planes in the same visual transition can therefore set pending again while the
+first frame is transferring. This clamp does not create a compose-once atomic
+commit boundary and is not a display fix.
+
+Evidence:
+[`2026-11-01-06-spi-coalescing-control.md`](../findings/2026-11-01-06-spi-coalescing-control.md)
+and `../../evidence/captures/gsi-spi-coalesce/spi-one-key.txt`.
+
+## Stable full-height client-composition pair
+
+The full-height-client driver accepts only 320-line framebuffer updates and
+uses the observed 256-pixel Android client stride. Under default Android
+composition it still failed physically: one controlled transition produced
+four submissions/four frame transfers, briefly appeared correct, and reverted
+to stale blue/yellow output.
+
+Forcing SurfaceFlinger client composition with
+`service call SurfaceFlinger 1008 i32 1` changed the bridge contract. The same
+controlled D-pad event produced one full-height `240x320` submission from a
+`256x320`, 1024-byte-pitch `AB24` client target. It caused two full-frame
+transfers but no short-plane submission; the physical output changed correctly
+and remained stable.
+
+A separate return to the animated Lineage welcome screen produced 35
+submissions, all with that same full-height client-target geometry. The user
+reported the physical Setup/SystemUI output correct and stable. This proves
+complete composed frame contents, not an exact one-transfer cadence, are the
+decisive requirement for the observed workload.
+
+The full-height driver and matching vbmeta are retained. Forced client
+composition is runtime-only and resets when SurfaceFlinger or the phone
+restarts; persistence has not yet been implemented or reboot-validated.
+
+Evidence:
+[`2026-11-01-07-spi-full-height-client.md`](../findings/2026-11-01-07-spi-full-height-client.md),
+`../../evidence/captures/gsi-spi-full-height/spi-one-key-client-composition.txt`,
+and
+`../../evidence/captures/gsi-spi-full-height/spi-lineage-welcome-client-composition.txt`.

@@ -12,11 +12,10 @@ This repository records the effort to run Android 14 on the TCL Flip 4 5G
 
 ## Current state
 
-Last recorded device state: Android 14 `treble_a64_bvN-userdebug` on slot B.
-The GSI's built-in **Rooted debugging** setting was enabled through Developer
-options. Runtime then provided root adbd and writable tracefs while
-`ro.debuggable` and `ro.force.debuggable` remained `0`. No partition write was
-required.
+Last recorded device state: Android 14 `treble_a64_bvN-userdebug` on slot B,
+locked/green, with the verified full-height-client SPI module and matching
+current-derived vbmeta retained. Root adbd and writable tracefs are available
+while `ro.debuggable` and `ro.force.debuggable` remain `0`.
 
 The first equivalent GSI SPI trace is now captured. One D-pad event produced
 96 framebuffer submissions: 93 full-screen and three `31x14`, all `AB24` with
@@ -36,20 +35,33 @@ frame.
 The immutable driver control preserved the same four submissions and five
 frame transfers while preventing new per-plane contents from replacing the
 RGB565 staging frame. Android still rendered correctly, and the physical panel
-remained stable gray instead of jumping. This rules out transfer cadence alone
-as a sufficient explanation and strengthens the content-contract diagnosis.
-The control was fully restored; the device again runs the stock module and
-original vbmeta with correct, stable static output.
+remained stable gray instead of jumping. This ruled out transfer cadence alone
+as a sufficient explanation.
+
+The pending-counter coalescing control also failed. It reduced five frame
+transfers to four, not approximately one, because the worker consumes pending
+before later planes arrive. Its physical output remained stale and corrupted.
+
+The retained full-height-client driver failed under default Android
+composition, but passed when SurfaceFlinger was forced to client composition.
+The same controlled key transition then became one full-height client-target
+submission and remained physically correct and stable. An animated Lineage
+welcome redraw also used only full-height client targets and was directly
+confirmed correct and stable.
+
+This is the first validated stable GSI display configuration. The driver and
+vbmeta persist, but forced client composition was enabled with
+`service call SurfaceFlinger 1008 i32 1`; that runtime setting resets on reboot
+or SurfaceFlinger restart.
 
 Lineage testing used both free `super` regions and overwrote the old stock
 system sectors in Region A. A metadata-only rollback is no longer sufficient;
 restoring stock requires the full eMMC backup or the affected system sectors.
 
-The next safe research step is the smaller coalescing control. Its vbmeta must
-be rebuilt from the exact current image: the old prepared profile vbmeta was
-found to contain a stale ODM descriptor. A prepared variant is not a confirmed
-fix; all raw-LBA, backup, rollback, descriptor-comparison, and read-back gates
-still apply before any write.
+The next safe research step is to make forced client composition reproducible
+at boot without changing another display variable, then reboot and repeat the
+controlled-client and Lineage/SystemUI gates. Until that is validated, reapply
+the runtime service call after any restart before relying on the panel.
 
 ## Read this before device work
 
@@ -88,6 +100,8 @@ still apply before any write.
 - [`2026-11-01-03-gsi-adb-root.md`](findings/2026-11-01-03-gsi-adb-root.md)
 - [`2026-11-01-04-fullscreen-client-control.md`](findings/2026-11-01-04-fullscreen-client-control.md)
 - [`2026-11-01-05-spi-driver-control-selection.md`](findings/2026-11-01-05-spi-driver-control-selection.md)
+- [`2026-11-01-06-spi-coalescing-control.md`](findings/2026-11-01-06-spi-coalescing-control.md)
+- [`2026-11-01-07-spi-full-height-client.md`](findings/2026-11-01-07-spi-full-height-client.md)
 
 Use [`findings/SESSION_TEMPLATE.md`](findings/SESSION_TEMPLATE.md) for the next
 session.

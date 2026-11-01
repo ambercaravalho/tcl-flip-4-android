@@ -6,8 +6,9 @@ BSP.
 
 The device's locked bootloader trusts public AOSP test keys across the relevant
 AVB chain, making a verified userspace replacement possible without a
-bootloader unlock. Android currently boots, but the physical SPI display
-flickers during redraw.
+bootloader unlock. Android boots, and a retained full-height SPI profile paired
+with forced SurfaceFlinger client composition now renders correctly and
+stably.
 
 For stock KaiOS root research, use
 [tcl-flip-4-root](https://github.com/ambercaravalho/tcl-flip-4-root).
@@ -95,7 +96,8 @@ tooling/scripts/backup.sh
 ## Current research state
 
 - Clean Android 14 `treble_a64_bvN` boots on slot B.
-- The panel is stable when static and flickers on redraw.
+- The stock SPI bridge is unstable when Android supplies independent hardware
+  planes because it treats each plane as a complete frame.
 - Correct host screenshots place the defect after logical composition.
 - The stock binary calls the SPI framebuffer update once per DRM plane while
   assuming every input is a full-screen precomposed RGB565 frame.
@@ -112,15 +114,22 @@ tooling/scripts/backup.sh
 - An immutable driver control kept the same submissions and transfers but
   prevented changing plane contents from replacing the staging frame; the
   physical panel stayed stable gray. Transfer cadence alone is not sufficient
-  to cause the failure. The stock driver and original vbmeta were then fully
-  restored.
+  to cause the failure.
+- A pending-counter coalescing control reduced five transfers to four and
+  remained physically incorrect; it did not establish an atomic-commit
+  boundary.
+- The full-height-client driver still failed under default composition. With
+  SurfaceFlinger forced to client composition, one controlled transition
+  became one full-height client-target submission and remained correct and
+  stable. The animated Lineage welcome screen also passed.
+- The full-height driver and matching vbmeta are retained. Forced client
+  composition is runtime-only and must be reapplied after a reboot or
+  SurfaceFlinger restart until persistence is implemented and validated.
 - Lineage testing overwrote Region A; metadata-only rollback is no longer
   sufficient.
 
-The next work is the smaller coalescing control. Its top-level vbmeta must be
-rebuilt from the exact current image because the old prepared profile carried
-a stale ODM descriptor. Prepared variants remain experiments, not confirmed
-fixes.
+The next work is to persist forced client composition at boot as a
+single-variable change, then reboot and repeat both physical display gates.
 
 ## Credits and license
 
