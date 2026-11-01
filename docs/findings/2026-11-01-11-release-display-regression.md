@@ -1,6 +1,6 @@
 # 2026-11-01 11: Release display regression
 
-Status: in progress
+Status: complete
 
 ## Objective
 
@@ -298,6 +298,15 @@ still supports the stable-display release claim.
 67. **Observation:** the release verifier accepted all eight staged images,
     their raw ranges, hashes, and write order. `SHA256SUMS` verifies every
     image and metadata asset.
+68. **Action:** committed and pushed the corrected sources, moved the
+    annotated `v0.1.0` tag, drafted the existing prerelease during replacement,
+    uploaded all corrected assets with clobber semantics, updated the release
+    notes, and republished it as a prerelease.
+69. **Observation:** all thirteen public asset names, sizes, and GitHub
+    SHA-256 digests match the local staged files. Ten metadata and small-image
+    assets were downloaded again and compared byte-for-byte.
+70. **Observation:** the corrected prerelease is public at
+    `https://github.com/ambercaravalho/tcl-flip-4-android/releases/tag/v0.1.0`.
 
 ## Conclusions
 
@@ -358,19 +367,18 @@ still supports the stable-display release claim.
   under `artifacts/build/release-display-persistent-v2/`.
 - Runtime data state: same-signed T440W Key Actions revision 3 is installed
   under `/data`, enabled, bound, and physically accepted by the user.
-- Public release: unchanged.
+- Public release: corrected `v0.1.0` prerelease is published with the
+  persistent-display and keypad-revision-3 images.
 - Rollback path: write the fresh backup ODM first and backup `vbmeta_b` last
   from
   `artifacts/backups/pre-release-display-persistent/20261101T221855Z/` to the
   same raw LBAs without `--skipresponse`, then read and compare both complete
   ranges before reboot.
-- Uncommitted tracked files: this finding, the persistent-helper correction,
-  its builder/reference/runbook updates, the baseline-script safety fix, and
-  the Root Probe diagnostic extension.
+- Repository state: tracked session sources are committed and pushed.
 
 ## Safe next step
 
-Keep the public release unchanged until the corrected ODM/vbmeta pair and
-upgrade-detectable keypad revision are packaged as a replacement release.
-Before publication, repeat a longer real-use soak and one additional cold-boot
-display/cursor gate.
+Share the prerelease with the one-command installer and collect independent
+T440W install/usage reports. Treat any renewed physical-panel instability as a
+release-blocking regression and preserve the exact device state before further
+experiments.
