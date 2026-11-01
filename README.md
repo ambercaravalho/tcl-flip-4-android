@@ -109,12 +109,18 @@ tooling/scripts/backup.sh
 - A controlled full-screen client reduced one transition to four submissions,
   but the panel still jumped and ended backlit gray while the Android
   screenshot remained correct.
+- An immutable driver control kept the same submissions and transfers but
+  prevented changing plane contents from replacing the staging frame; the
+  physical panel stayed stable gray. Transfer cadence alone is not sufficient
+  to cause the failure. The stock driver and original vbmeta were then fully
+  restored.
 - Lineage testing overwrote Region A; metadata-only rollback is no longer
   sufficient.
 
-The pre-patch trace gate is complete. The next work is to select one prepared
-driver control for a hash-locked, read-back-verified single-variable
-experiment. Prepared variants remain experiments, not confirmed fixes.
+The next work is the smaller coalescing control. Its top-level vbmeta must be
+rebuilt from the exact current image because the old prepared profile carried
+a stale ODM descriptor. Prepared variants remain experiments, not confirmed
+fixes.
 
 ## Credits and license
 

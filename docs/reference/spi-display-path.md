@@ -112,3 +112,35 @@ The root/tracefs gate passes through the GSI's built-in Rooted debugging
 control. Prepared immutable, coalescing, full-height-client, and lower-clock
 profiles remain experiments, not confirmed fixes; each still requires a
 single-variable, hash-locked, read-back-verified test.
+
+## Immutable driver control
+
+The one-instruction immutable profile prevents framebuffer updates from
+replacing the driver's RGB565 staging contents while preserving queueing, TE,
+and synchronous SPI transfers. On the same full-screen one-key workload it
+produced:
+
+- the same six plane updates;
+- the same four framebuffer submissions: two `240x21` and two `240x320`;
+- five frame transfers plus five full-window commands;
+- median TE interval `16.787 ms`;
+- full-frame SPI duration up to `25.087 ms`.
+
+Android correctly changed from blue/yellow to green/magenta, but the physical
+panel remained stable gray because no current content reached the staging
+frame. The unchanged submission/transfer workload no longer jumped or
+flickered. Transfer cadence alone is therefore insufficient to explain the
+failure; changing independent per-plane staging contents is required for the
+observed physical instability.
+
+The immutable profile is a diagnostic control, not a fix. It was restored
+byte-for-byte to the stock module and original vbmeta after testing.
+
+The original prepared profile vbmeta was also found unsafe for the current
+GSI because it contained a stale ODM descriptor. Any later profile must derive
+top-level vbmeta from bytes proven identical to the current device and compare
+all untargeted descriptors before writing.
+
+Evidence:
+[`2026-11-01-05-spi-driver-control-selection.md`](../findings/2026-11-01-05-spi-driver-control-selection.md)
+and `../../evidence/captures/gsi-spi-immutable/spi-one-key.txt`.

@@ -33,14 +33,23 @@ Reducing the burst from 96 submissions to four was not sufficient; the private
 bridge still received multiple independent planes instead of one composed
 frame.
 
+The immutable driver control preserved the same four submissions and five
+frame transfers while preventing new per-plane contents from replacing the
+RGB565 staging frame. Android still rendered correctly, and the physical panel
+remained stable gray instead of jumping. This rules out transfer cadence alone
+as a sufficient explanation and strengthens the content-contract diagnosis.
+The control was fully restored; the device again runs the stock module and
+original vbmeta with correct, stable static output.
+
 Lineage testing used both free `super` regions and overwrote the old stock
 system sectors in Region A. A metadata-only rollback is no longer sufficient;
 restoring stock requires the full eMMC backup or the affected system sectors.
 
-The next safe research step is to compare prepared driver controls against the
-completed traces and plan one hash-locked, single-variable experiment. A
-prepared variant is not a confirmed fix; all normal raw-LBA, backup, rollback,
-and read-back gates still apply before any write.
+The next safe research step is the smaller coalescing control. Its vbmeta must
+be rebuilt from the exact current image: the old prepared profile vbmeta was
+found to contain a stale ODM descriptor. A prepared variant is not a confirmed
+fix; all raw-LBA, backup, rollback, descriptor-comparison, and read-back gates
+still apply before any write.
 
 ## Read this before device work
 
@@ -78,6 +87,7 @@ and read-back gates still apply before any write.
 - [`2026-11-01-02-clean-gsi-debugging.md`](findings/2026-11-01-02-clean-gsi-debugging.md)
 - [`2026-11-01-03-gsi-adb-root.md`](findings/2026-11-01-03-gsi-adb-root.md)
 - [`2026-11-01-04-fullscreen-client-control.md`](findings/2026-11-01-04-fullscreen-client-control.md)
+- [`2026-11-01-05-spi-driver-control-selection.md`](findings/2026-11-01-05-spi-driver-control-selection.md)
 
 Use [`findings/SESSION_TEMPLATE.md`](findings/SESSION_TEMPLATE.md) for the next
 session.

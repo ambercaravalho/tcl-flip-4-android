@@ -11,6 +11,15 @@ if [[ $# -ne 1 ]]; then
 fi
 
 PROFILE="$1"
+case "$PROFILE" in
+  immutable|coalesce|full-height-client)
+    echo "error: '$PROFILE' requires vbmeta derived from a same-session target read-back" >&2
+    echo "error: prebuilt module-profile vbmeta may contain stale untargeted descriptors" >&2
+    echo "follow the current finding's raw-LBA backup/write/read-back procedure" >&2
+    exit 1
+    ;;
+esac
+
 LOADER="tooling/loader/flip-4-edl.bin"
 STOCK_DLKM="artifacts/build/vendor_dlkm_b.img"
 STOCK_DTBO="artifacts/build/dtbo_b.img"
@@ -32,11 +41,6 @@ case "$PROFILE" in
     VENDOR_IMG="$STOCK_DLKM"
     DTBO_IMG="$STOCK_DTBO"
     VBMETA_IMG="$BASE_VBMETA"
-    ;;
-  immutable|coalesce|full-height-client)
-    VENDOR_IMG="artifacts/build/spi-driver-tests/vendor_dlkm_b-$PROFILE.img"
-    DTBO_IMG="$STOCK_DTBO"
-    VBMETA_IMG="artifacts/build/spi-driver-tests/vbmeta_b-$PROFILE.img"
     ;;
   clock25)
     VENDOR_IMG="$STOCK_DLKM"
