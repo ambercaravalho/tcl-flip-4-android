@@ -75,10 +75,14 @@ The validated physical-keypad profile additionally maps:
 - left/right softkeys `139`/`158` -> inert `F1`/`F2`;
 - `231` remains `CALL`.
 
-The baked version-code-2 `org.tclflip4.keypadcursor` AccessibilityService
+The version-code-3 `org.tclflip4.keypadcursor` AccessibilityService
 consumes the reserved keys needed for global behavior. `ENVELOPE` launches
 Messaging and `CONTACTS` delegates cursor toggle to C9. C9 supplies the cursor,
 D-pad movement, center click, and conditional page up/down behavior.
+
+Revision 3 deliberately differs in byte length from revision 2. PackageManager
+can otherwise reuse a stale same-path manifest when two system APK revisions
+have equal size and normalized timestamps.
 
 TrebleDroid's `vndk.rc` copies `persist.sys.phh.mainkeys` to
 `qemu.hw.mainkeys`. The ODM init hook sets both to `1` before framework startup
@@ -88,9 +92,10 @@ inset remained absent; post-boot validation must inspect the actual inset and
 physical panel rather than rely only on the late property value.
 
 Evidence:
-[`2026-11-01-09-physical-keypad-navigation.md`](../findings/2026-11-01-09-physical-keypad-navigation.md)
+[`2026-11-01-09-physical-keypad-navigation.md`](../findings/2026-11-01-09-physical-keypad-navigation.md),
+[`2026-11-01-10-rooted-release-stack.md`](../findings/2026-11-01-10-rooted-release-stack.md),
 and
-[`2026-11-01-10-rooted-release-stack.md`](../findings/2026-11-01-10-rooted-release-stack.md).
+[`2026-11-01-11-release-display-regression.md`](../findings/2026-11-01-11-release-display-regression.md).
 
 ## Debugging caveat
 

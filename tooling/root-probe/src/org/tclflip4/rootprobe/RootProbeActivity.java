@@ -18,19 +18,56 @@ public final class RootProbeActivity extends Activity {
         setContentView(result);
         final boolean cleanupPolicy =
                 getIntent().getBooleanExtra("cleanup_policy", false);
+        final boolean queryComposition =
+                getIntent().getBooleanExtra("query_composition", false);
+        final boolean enableComposition =
+                getIntent().getBooleanExtra("enable_composition", false);
+        final boolean holdComposition =
+                getIntent().getBooleanExtra("hold_composition", false);
+        final boolean sustainComposition =
+                getIntent().getBooleanExtra("sustain_composition", false);
         new Thread(new Runnable() {
             @Override
             public void run() {
-                requestRoot(result, cleanupPolicy);
+                requestRoot(
+                        result,
+                        cleanupPolicy,
+                        queryComposition,
+                        enableComposition,
+                        holdComposition,
+                        sustainComposition);
             }
         }, "root-probe").start();
     }
 
-    private void requestRoot(TextView result, boolean cleanupPolicy) {
+    private void requestRoot(
+            TextView result,
+            boolean cleanupPolicy,
+            boolean queryComposition,
+            boolean enableComposition,
+            boolean holdComposition,
+            boolean sustainComposition) {
         StringBuilder output = new StringBuilder();
         int status = -1;
         try {
             String command = "id";
+            if (sustainComposition) {
+                command += "; i=0"
+                        + "; while [ \"$i\" -lt 60 ]; do"
+                        + " service call SurfaceFlinger 1008 i32 1 >/dev/null"
+                        + "; i=$((i + 1)); sleep 1; done"
+                        + "; service call SurfaceFlinger 1010";
+            } else if (holdComposition) {
+                command += "; service call SurfaceFlinger 1008 i32 1"
+                        + "; service call SurfaceFlinger 1010"
+                        + "; sleep 10"
+                        + "; service call SurfaceFlinger 1010";
+            } else if (enableComposition) {
+                command += "; service call SurfaceFlinger 1008 i32 1"
+                        + "; service call SurfaceFlinger 1010";
+            } else if (queryComposition) {
+                command += "; service call SurfaceFlinger 1010";
+            }
             if (cleanupPolicy) {
                 command += "; /debug_ramdisk/magisk --sqlite "
                         + "\"DELETE FROM policies WHERE uid="

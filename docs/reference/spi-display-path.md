@@ -198,11 +198,16 @@ device-specific ODM init service that invokes transaction `1008` after every
 SurfaceFlinger start.
 
 One-shot invocations at SurfaceFlinger start, boot completion, and five seconds
-after boot completion were all overwritten by later initialization. The
-validated helper reasserts the control every five seconds for one minute, then
-exits. Hardware composition remains disabled after exit.
+after boot completion were all overwritten by later initialization. A
+one-minute helper initially appeared stable, but a later release regression
+showed that the runtime control can also be reset after that helper exits.
 
-The bounded profile passed:
+The current helper therefore remains active and reasserts the control once per
+second. That cadence is based on a controlled runtime test in which the
+physical panel remained correct during normal navigation. Hardware composition
+must remain disabled for the service lifetime.
+
+The earlier bounded profile passed:
 
 - locked/green normal reboot with the helper stopped afterward;
 - controlled SurfaceFlinger/framework restart with the helper stopped
@@ -211,10 +216,13 @@ The bounded profile passed:
   two frame transfers;
 - the Lineage Setup physical-output gate.
 
-The user directly reported correct, stable physical output after each gate.
+The user directly reported correct, stable physical output after each gate, but
+that acceptance window was too short to establish durable persistence.
 Persistence changes only ODM and its top-level vbmeta descriptor; the
 full-height driver remains unchanged.
 
 Evidence:
 [`2026-11-01-08-persistent-client-composition.md`](../findings/2026-11-01-08-persistent-client-composition.md)
+and
+[`2026-11-01-11-release-display-regression.md`](../findings/2026-11-01-11-release-display-regression.md).
 and `../../evidence/captures/gsi-spi-persistence/`.

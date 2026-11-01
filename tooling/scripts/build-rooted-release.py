@@ -44,7 +44,7 @@ SYSTEM_GROWTH = 256 * 1024 * 1024
 MAX_SYSTEM_PARTITION = 2_541_662_208
 EXPECTED_RAW_SYSTEM = 2_056_237_056
 EXPECTED_KEYPAD_ACTIONS = (
-    "450e8e06a6b723479b0279d6857bb2d47a3fde594e44b8c403e56749497d21ec"
+    "fa95e366d2d572e5ccd6f1798df9d2b587ab9e8972b7bdf45196c7b520e6f88e"
 )
 
 
@@ -394,7 +394,7 @@ def main():
         parser.add_argument(f"--expect-{name}-sha256", required=True)
     parser.add_argument(
         "--keypad-actions-apk",
-        default="artifacts/build/keypad-actions-release-v2/keypad-cursor.apk",
+        default="artifacts/build/keypad-actions-release-v3-a/keypad-cursor.apk",
     )
     parser.add_argument(
         "--c9-apk", default="artifacts/build/c9-t440w/c9-t440w.apk"

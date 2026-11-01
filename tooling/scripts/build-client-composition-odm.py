@@ -17,7 +17,12 @@ import tempfile
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(REPO_ROOT, "tooling", "scripts"))
 
-from prepare_gsi import sha256_file, strip_existing_avb_footer, verify_vbmeta_signature
+from prepare_gsi import (
+    normalize_ext4_metadata,
+    sha256_file,
+    strip_existing_avb_footer,
+    verify_vbmeta_signature,
+)
 from inspect_ext4 import Ext4Reader
 
 AVBTOOL = os.path.join(REPO_ROOT, "tooling", "tools", "avb", "avbtool.py")
@@ -25,7 +30,9 @@ PATCH_VBMETA = os.path.join(REPO_ROOT, "tooling", "scripts", "patch_vbmeta.py")
 VBMETA_KEY = os.path.join(
     REPO_ROOT, "tooling", "tools", "avb", "testkeys", "testkey_rsa4096.pem"
 )
-INIT_RC = os.path.join(REPO_ROOT, "device", "t440w", "init", "init.t440w.debug.rc")
+INIT_RC = os.path.join(
+    REPO_ROOT, "device", "t440w", "init", "init.t440w.platform.rc"
+)
 HELPER = os.path.join(
     REPO_ROOT, "device", "t440w", "init", "t440w-force-client-composition.sh"
 )
@@ -73,6 +80,53 @@ def ext4_has_path(image_path, path):
             return False
 
 
+def verify_embedded_files(image_path):
+    expected = {
+        "/etc/init/init.t440w.platform.rc": INIT_RC,
+        "/bin/t440w-force-client-composition.sh": HELPER,
+    }
+    with open(image_path, "rb") as image:
+        reader = Ext4Reader(image)
+        for target, source in expected.items():
+            actual = reader.read_inode_data(reader.resolve_path(target))
+            with open(source, "rb") as expected_file:
+                if actual != expected_file.read():
+                    raise SystemExit(f"error: embedded file mismatch: {target}")
+        try:
+            reader.resolve_path("/etc/init/init.t440w.debug.rc")
+        except FileNotFoundError:
+            pass
+        else:
+            raise SystemExit("error: debug init policy is present in release ODM")
+
+
+def verify_selinux_label(image_path, target, expected):
+    image_dir = os.path.dirname(os.path.abspath(image_path))
+    image_name = os.path.basename(image_path)
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{image_dir}:/image:ro",
+            "t440w-tools:local",
+            "debugfs",
+            "-R",
+            f"ea_get {target} security.selinux",
+            f"/image/{image_name}",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    if f'"{expected}\\000"' not in result.stdout:
+        raise SystemExit(
+            f"error: {target} SELinux label is not {expected}: "
+            f"{result.stdout.strip()}"
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--odm", required=True, help="Exact current signed ODM image")
@@ -109,7 +163,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="t440w-client-composition-") as work:
         work_odm = os.path.join(work, "odm.img")
         shutil.copyfile(odm_out, work_odm)
-        shutil.copyfile(INIT_RC, os.path.join(work, "init.t440w.debug.rc"))
+        shutil.copyfile(INIT_RC, os.path.join(work, "init.t440w.platform.rc"))
         shutil.copyfile(HELPER, os.path.join(work, "t440w-force-client-composition.sh"))
         open(os.path.join(work, "ctx.rc.bin"), "wb").write(
             b"u:object_r:vendor_configs_file:s0\x00"
@@ -117,13 +171,16 @@ def main():
         open(os.path.join(work, "ctx.vendor.bin"), "wb").write(
             b"u:object_r:vendor_file:s0\x00"
         )
+        open(os.path.join(work, "ctx.exec.bin"), "wb").write(
+            b"u:object_r:vendor_shell_exec:s0\x00"
+        )
         commands = [
-            "rm /etc/init/init.t440w.debug.rc",
-            "write /work/init.t440w.debug.rc /etc/init/init.t440w.debug.rc",
-            "sif /etc/init/init.t440w.debug.rc mode 0100644",
-            "sif /etc/init/init.t440w.debug.rc uid 0",
-            "sif /etc/init/init.t440w.debug.rc gid 0",
-            "ea_set -f /work/ctx.rc.bin /etc/init/init.t440w.debug.rc security.selinux",
+            "rm /etc/init/init.t440w.platform.rc",
+            "write /work/init.t440w.platform.rc /etc/init/init.t440w.platform.rc",
+            "sif /etc/init/init.t440w.platform.rc mode 0100644",
+            "sif /etc/init/init.t440w.platform.rc uid 0",
+            "sif /etc/init/init.t440w.platform.rc gid 0",
+            "ea_set -f /work/ctx.rc.bin /etc/init/init.t440w.platform.rc security.selinux",
         ]
         if not has_bin:
             commands.extend(
@@ -143,7 +200,7 @@ def main():
                 "sif /bin/t440w-force-client-composition.sh mode 0100755",
                 "sif /bin/t440w-force-client-composition.sh uid 0",
                 "sif /bin/t440w-force-client-composition.sh gid 0",
-                "ea_set -f /work/ctx.vendor.bin /bin/t440w-force-client-composition.sh security.selinux",
+                "ea_set -f /work/ctx.exec.bin /bin/t440w-force-client-composition.sh security.selinux",
             ]
         )
         open(os.path.join(work, "debugfs.cmd"), "w").write("\n".join(commands) + "\n")
@@ -163,6 +220,13 @@ def main():
             ]
         )
         shutil.copyfile(work_odm, odm_out)
+        normalize_ext4_metadata(
+            odm_out,
+            [
+                "/etc/init/init.t440w.platform.rc",
+                "/bin/t440w-force-client-composition.sh",
+            ],
+        )
 
     run(
         [
@@ -194,6 +258,17 @@ def main():
         canonical_odm = os.path.join(verify_dir, "odm.img")
         shutil.copyfile(odm_out, canonical_odm)
         run([sys.executable, AVBTOOL, "verify_image", "--image", canonical_odm])
+    verify_embedded_files(odm_out)
+    verify_selinux_label(
+        odm_out,
+        "/bin/t440w-force-client-composition.sh",
+        "u:object_r:vendor_shell_exec:s0",
+    )
+    verify_selinux_label(
+        odm_out,
+        "/etc/init/init.t440w.platform.rc",
+        "u:object_r:vendor_configs_file:s0",
+    )
     run(
         [
             sys.executable,

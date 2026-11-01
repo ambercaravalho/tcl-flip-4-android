@@ -40,8 +40,8 @@
     },
     {
       "name": "system_b_extent1.img",
-      "source": "artifacts/build/rooted-release/final-release-v2/system_b_extent1.img",
-      "sha256": "0588e3523bfa663109ddb0be8c3ebe78e0a2d11a7f308085e939db8579a960f4",
+      "source": "artifacts/build/rooted-release/replacement-display-v2-keypad-v3/system_b_extent1.img",
+      "sha256": "6ecb7197023b17f6335bbdd31a36713f3fc82b0b48118a4e77df0183cb891b20",
       "size": 1709264896,
       "raw_lba": 6254592,
       "sectors": 3338408,
@@ -60,8 +60,8 @@
     },
     {
       "name": "odm_b-rooted-release.img",
-      "source": "artifacts/build/rooted-release/final-release-v2/odm_b-rooted-release.img",
-      "sha256": "fc8039c407fdd41328d02e66c5b2a02e48bc857ea2adba3c274550b80178a437",
+      "source": "artifacts/build/rooted-release/replacement-display-v2-keypad-v3/odm_b-rooted-release.img",
+      "sha256": "59567885eac61689223d51621c55c81ede1d4ea809963aaa006f5b5fef621192",
       "size": 1470464,
       "raw_lba": 3688448,
       "sectors": 2872,
@@ -80,8 +80,8 @@
     },
     {
       "name": "vbmeta_system_b-rooted-release.img",
-      "source": "artifacts/build/rooted-release/final-release-v2/vbmeta_system_b-rooted-release.img",
-      "sha256": "852ce9b924b61171900a6acd88700c887b5bf73663f487a82a6afd50821171ea",
+      "source": "artifacts/build/rooted-release/replacement-display-v2-keypad-v3/vbmeta_system_b-rooted-release.img",
+      "sha256": "05368c1b7f94cdc311518754e8837b74fbace2552621dd89e6c75f15d933effa",
       "size": 65536,
       "raw_lba": 2080768,
       "sectors": 128,
@@ -90,8 +90,8 @@
     },
     {
       "name": "vbmeta_b-rooted-release.img",
-      "source": "artifacts/build/rooted-release/final-release-v2/vbmeta_b-rooted-release.img",
-      "sha256": "734030bc9080e14037ec0ef76b00fa1b785828a43a3b95e32c13adad6ed9852b",
+      "source": "artifacts/build/rooted-release/replacement-display-v2-keypad-v3/vbmeta_b-rooted-release.img",
+      "sha256": "3b0862bc419f837067a7fbd5f7c4587fc55bd7ee2d16b42ca4fd522419905af7",
       "size": 65536,
       "raw_lba": 3377152,
       "sectors": 128,

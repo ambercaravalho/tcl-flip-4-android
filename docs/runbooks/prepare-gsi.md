@@ -26,8 +26,8 @@ tooling/scripts/prepare_gsi.py path/to/gsi.img.xz \
 ```
 
 The default release profile does not force USB debugging or root adbd. It sets
-`ro.adb.secure=1`, includes the validated bounded forced-client-composition
-helper and early hardware-navigation policy in ODM, and generates an enforcing
+`ro.adb.secure=1`, includes the persistent forced-client-composition helper
+and early hardware-navigation policy in ODM, and generates an enforcing
 merged SELinux policy. The pipeline also embeds the signed keypad action APK
 and its idempotent accessibility enablement helper in system.
 
@@ -96,12 +96,12 @@ output, `adb shell id` must remain shell and `adb root` must fail; Magisk
 application root is a separate gate. Do not infer either state from image
 contents. The earlier failed property inference is documented in
 [`../findings/2026-11-01-02-clean-gsi-debugging.md`](../findings/2026-11-01-02-clean-gsi-debugging.md).
-Also wait for the bounded helper to stop, confirm transaction `1010` still
-reports forced client composition enabled, and perform the physical display
-gate before relying on the panel. Confirm the baked keypad service is enabled
-and bound, `persist.sys.phh.mainkeys=1`, no navigation-bar inset source is
-present, and perform the complete physical-keypad/cursor gate. A late
-`qemu.hw.mainkeys` value alone is not a sufficient functional check.
+Also confirm the composition helper remains running, transaction `1010`
+reports forced client composition enabled, and the physical display stays
+correct through an extended idle and navigation gate. Confirm the baked keypad
+service is enabled and bound, `persist.sys.phh.mainkeys=1`, no navigation-bar
+inset source is present, and perform the complete physical-keypad/cursor gate.
+A late `qemu.hw.mainkeys` value alone is not a sufficient functional check.
 
 For the rooted release, install the image-carried Manager as a normal data app:
 

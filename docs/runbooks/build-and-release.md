@@ -16,7 +16,7 @@ tooling/scripts/setup.sh
 tooling/scripts/fetch-release-components.py
 tooling/scripts/build-c9-t440w.sh
 tooling/scripts/build-keypad-cursor.sh \
-  artifacts/build/keypad-actions-release-v2
+  artifacts/build/keypad-actions-release-v3-a
 ```
 
 The canonical component identities and source commits are in
@@ -27,9 +27,9 @@ The image builders also require Android SDK tools and the local
 not yet defined by this repository; a new host cannot claim a reproducible
 build until its toolchain is independently reconstructed and recorded.
 
-## Build the accepted system set
+## Build the candidate system set
 
-The `v0.1.0` release was produced from these exact inputs:
+The current candidate starts from these accepted inputs:
 
 ```bash
 tooling/scripts/build-rooted-release.py \
@@ -45,7 +45,7 @@ tooling/scripts/build-rooted-release.py \
   --expect-vbmeta-system-sha256 5bb155cde647c2d275ecdec48587c0e181aab44d9f7b55c4126f5bd39c31b44c \
   --super-meta artifacts/build/android-lineage21-clean/super_meta_android.img \
   --expect-super-meta-sha256 1fc97f04e3f50149295e9a082be9ae1901fa67451d742ab791372c59115ab725 \
-  --out-dir artifacts/build/rooted-release/rebuild-v0.1.0
+  --out-dir artifacts/build/rooted-release/candidate
 ```
 
 The Magisk input was derived separately with
@@ -72,13 +72,8 @@ Build into a local, non-synchronized output directory twice. Compare:
 - `vbmeta_system_b`;
 - final top-level vbmeta.
 
-Every pair must be byte-identical and match
-`tooling/releases/v0.1.0.json`. Run the release verifier before packaging:
-
-```bash
-.venv/bin/python tooling/scripts/install-release.py \
-  artifacts/releases/v0.1.0
-```
+Every pair must be byte-identical. Record the accepted hashes in the session
+finding before packaging.
 
 Do not publish the monolithic system image; it duplicates the two flash
 extents and exceeds GitHub's per-asset limit. Never package backups, userdata,
@@ -93,8 +88,12 @@ dirty tree so the archived sources and sanitized manifest can name one exact
 commit. Then create the staging directory and metadata:
 
 ```bash
+VERSION=vX.Y.Z
 .venv/bin/python tooling/scripts/package-release.py \
-  --output artifacts/releases/v0.1.0
+  --output "artifacts/releases/$VERSION"
+
+.venv/bin/python tooling/scripts/install-release.py \
+  "artifacts/releases/$VERSION"
 ```
 
 The packager copies only the allowlisted image set, writes `SHA256SUMS`, a
@@ -106,20 +105,20 @@ all generated text before upload.
 Tag the clean source commit named by `release-manifest.json`:
 
 ```bash
-git tag -a v0.1.0 -m "T440W Android 14 v0.1.0"
-git push origin v0.1.0
+git tag -a "$VERSION" -m "T440W Android 14 $VERSION"
+git push origin "$VERSION"
 ```
 
 Create a draft pre-release and upload the staged assets:
 
 ```bash
-gh release create v0.1.0 \
+gh release create "$VERSION" \
   --repo ambercaravalho/tcl-flip-4-android \
-  --title "T440W Android 14 v0.1.0" \
-  --notes-file artifacts/releases/v0.1.0/RELEASE_NOTES.md \
+  --title "T440W Android 14 $VERSION" \
+  --notes-file "artifacts/releases/$VERSION/RELEASE_NOTES.md" \
   --prerelease --draft
 
-gh release upload v0.1.0 artifacts/releases/v0.1.0/* \
+gh release upload "$VERSION" "artifacts/releases/$VERSION"/* \
   --repo ambercaravalho/tcl-flip-4-android
 ```
 
@@ -128,7 +127,7 @@ sanitized manifest, and small image assets into a new temporary directory and
 hash them again. Publish only after remote verification:
 
 ```bash
-gh release edit v0.1.0 \
+gh release edit "$VERSION" \
   --repo ambercaravalho/tcl-flip-4-android \
   --draft=false --prerelease
 ```

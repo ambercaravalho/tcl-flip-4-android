@@ -5,8 +5,14 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$DIR"
 
+ROOT_CAPTURE=0
+if [[ "${1:-}" == "--root" ]]; then
+  ROOT_CAPTURE=1
+  shift
+fi
+
 if [[ $# -gt 1 ]]; then
-  echo "usage: tooling/scripts/capture-display-baseline.sh [output-directory]" >&2
+  echo "usage: tooling/scripts/capture-display-baseline.sh [--root] [output-directory]" >&2
   exit 2
 fi
 
@@ -18,7 +24,9 @@ if ! adb get-state >/dev/null 2>&1; then
   exit 1
 fi
 
-adb root >/dev/null 2>&1 || true
+if ((ROOT_CAPTURE)); then
+  adb root
+fi
 adb wait-for-device
 
 capture() {
