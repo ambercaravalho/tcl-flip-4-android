@@ -75,3 +75,19 @@ Do not infer root ADB from ODM input properties. On the clean GSI, the runtime
 was `ro.debuggable=0` and `service.adb.root=0` because `ro.debuggable` had
 already become read-only. See
 [`2026-11-01-02-clean-gsi-debugging.md`](../findings/2026-11-01-02-clean-gsi-debugging.md).
+
+The tested Lineage/crDroid GSI instead exposes `adbroot_service` and a
+**Rooted debugging** switch in Developer options. Enabling that switch through
+the system Settings UI produced root adbd, `service.adb.root=1`, and writable
+tracefs even though `ro.debuggable=0` and `ro.force.debuggable=0` remained
+unchanged. Shell cannot directly call `setEnabled()` because the service
+requires a system-UID caller.
+
+The stock `init_boot_b` ramdisk's
+`system/etc/ramdisk/build.prop` contains boot-image identity only, not either
+debug property. AOSP's separate `/force_debuggable` mechanism is gated on an
+unlocked/orange verified-boot state and is not activated by adding the marker
+to this locked/green device.
+
+Evidence:
+[`2026-11-01-03-gsi-adb-root.md`](../findings/2026-11-01-03-gsi-adb-root.md).

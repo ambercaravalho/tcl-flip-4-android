@@ -12,21 +12,35 @@ This repository records the effort to run Android 14 on the TCL Flip 4 5G
 
 ## Current state
 
-Last recorded device state: Android 14 `treble_a64_bvN-userdebug` on slot B,
-captured at `2026-11-01T15:20:28Z`. It boots, but redraws still cause severe
-physical-panel flicker. ADB is available, but root ADB and tracefs write access
-are not: runtime reported `ro.debuggable=0`, `service.adb.root=0`, and
-`adb root` refused. The ODM image's requested values did not override the
-already-frozen read-only properties.
+Last recorded device state: Android 14 `treble_a64_bvN-userdebug` on slot B.
+The GSI's built-in **Rooted debugging** setting was enabled through Developer
+options. Runtime then provided root adbd and writable tracefs while
+`ro.debuggable` and `ro.force.debuggable` remained `0`. No partition write was
+required.
+
+The first equivalent GSI SPI trace is now captured. One D-pad event produced
+96 framebuffer submissions: 93 full-screen and three `31x14`, all `AB24` with
+1024-byte pitch. It generated 98 frame SPI transfers plus ten panel-window
+commands. This contrasts with stock's 16 full-screen `BG16` submissions and 18
+frame transfers, and directly confirms the multi-plane/format contract
+mismatch on the flickering GSI.
+
+The controlled full-screen-client gate is also complete. One intended visual
+transition produced four framebuffer submissions—two `240x21` and two
+`240x320`—and five frame transfers. The physical panel briefly changed, then
+jumped and ended backlit gray, while Android's screenshot remained correct.
+Reducing the burst from 96 submissions to four was not sufficient; the private
+bridge still received multiple independent planes instead of one composed
+frame.
 
 Lineage testing used both free `super` regions and overwrote the old stock
 system sectors in Region A. A metadata-only rollback is no longer sufficient;
 restoring stock requires the full eMMC backup or the affected system sectors.
 
-The next safe research step is to fix and verify the debug/root property path
-without assuming ODM wins, then capture an equivalent SPI trace on the GSI.
-Do not patch the display driver merely because the reconstructed mechanism is
-plausible; the GSI-side trace gate remains open.
+The next safe research step is to compare prepared driver controls against the
+completed traces and plan one hash-locked, single-variable experiment. A
+prepared variant is not a confirmed fix; all normal raw-LBA, backup, rollback,
+and read-back gates still apply before any write.
 
 ## Read this before device work
 
@@ -62,6 +76,8 @@ plausible; the GSI-side trace gate remains open.
 - [`2026-10-31-05-spi-driver-reconstruction.md`](findings/2026-10-31-05-spi-driver-reconstruction.md)
 - [`2026-11-01-01-stock-kaios-control.md`](findings/2026-11-01-01-stock-kaios-control.md)
 - [`2026-11-01-02-clean-gsi-debugging.md`](findings/2026-11-01-02-clean-gsi-debugging.md)
+- [`2026-11-01-03-gsi-adb-root.md`](findings/2026-11-01-03-gsi-adb-root.md)
+- [`2026-11-01-04-fullscreen-client-control.md`](findings/2026-11-01-04-fullscreen-client-control.md)
 
 Use [`findings/SESSION_TEMPLATE.md`](findings/SESSION_TEMPLATE.md) for the next
 session.
@@ -79,3 +95,4 @@ session.
 - [`runbooks/flash-and-verify.md`](runbooks/flash-and-verify.md)
 - [`runbooks/backup-and-restore.md`](runbooks/backup-and-restore.md)
 - [`runbooks/capture-display-trace.md`](runbooks/capture-display-trace.md)
+- [`runbooks/enable-gsi-root-adb.md`](runbooks/enable-gsi-root-adb.md)

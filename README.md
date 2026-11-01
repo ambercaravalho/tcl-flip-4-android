@@ -7,7 +7,7 @@ BSP.
 The device's locked bootloader trusts public AOSP test keys across the relevant
 AVB chain, making a verified userspace replacement possible without a
 bootloader unlock. Android currently boots, but the physical SPI display
-flickers during redraw and root ADB is not yet reliable on the clean GSI.
+flickers during redraw.
 
 For stock KaiOS root research, use
 [tcl-flip-4-root](https://github.com/ambercaravalho/tcl-flip-4-root).
@@ -101,15 +101,20 @@ tooling/scripts/backup.sh
   assuming every input is a full-screen precomposed RGB565 frame.
 - Stock KaiOS actually supplies that contract: one full-screen BG16 plane per
   animation frame.
-- The matching GSI trace is still missing because runtime reported
-  `ro.debuggable=0`, `service.adb.root=0`, `adb root` was refused, and tracefs
-  was not writable.
+- The GSI's built-in Rooted debugging setting provides root adbd and writable
+  tracefs without changing `ro.debuggable=0`.
+- The matching GSI trace confirms the contract violation: one D-pad event
+  generated 96 `AB24` framebuffer submissions and 98 frame transfers, versus
+  stock's 16 `BG16` submissions and 18 transfers.
+- A controlled full-screen client reduced one transition to four submissions,
+  but the panel still jumped and ended backlit gray while the Android
+  screenshot remained correct.
 - Lineage testing overwrote Region A; metadata-only rollback is no longer
   sufficient.
 
-The next work is to establish and verify an earlier GSI root/debug mechanism,
-then capture the GSI SPI trace. Prepared kernel variants are experiments, not
-confirmed fixes.
+The pre-patch trace gate is complete. The next work is to select one prepared
+driver control for a hash-locked, read-back-verified single-variable
+experiment. Prepared variants remain experiments, not confirmed fixes.
 
 ## Credits and license
 

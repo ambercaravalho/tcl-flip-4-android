@@ -39,8 +39,8 @@ The worker copies that staging frame to an immutable backup under a mutex,
 waits for TE, programs a full-screen `CASET`/`RASET`/`RAMWR` window, and uses
 synchronous `spi_sync()`. There is no packed ROI path.
 
-The confirmed binary defect is a plane-to-frame contract violation. Whether it
-fully explains a particular GSI boot remains gated on the missing GSI trace.
+The confirmed binary defect is a plane-to-frame contract violation. The GSI
+trace below directly demonstrates that violation on the flickering boot.
 
 ## Stock control
 
@@ -59,15 +59,56 @@ plane per animation frame, not because the transfer fits inside 60 Hz.
 Evidence:
 [`2026-11-01-01-stock-kaios-control.md`](../findings/2026-11-01-01-stock-kaios-control.md).
 
-## Required test gate
+## GSI comparison
 
-Before claiming or flashing a kernel fix, prove on the GSI that:
+One deterministic D-pad-down event (`code=108`) on the Android 14 GSI
+produced:
 
-1. one visual frame generates multiple `spi_display_update_fb` calls;
-2. those calls have different plane geometry or content roles;
-3. SPI transfer count follows plane-update count; and
-4. one real full-screen client target changes the count and physical result.
+- 102 plane-update entries and 96 calls into `spi_display_update_fb`
+- 93 full-screen `240x320` submissions
+- three `31x14` submissions with mixed `256x32` and `256x320` buffers
+- every submission in `AB24` with 1024-byte pitch
+- repeated paired full-screen submissions within the same atomic commits
+- 98 completed frame transfers from `spi_kickoff_thread`
+- ten command transfers from two full-window resets
+- median SPI duration 24.894 ms and median TE interval 16.789 ms
 
-Root ADB and tracefs write access must pass the runtime gate first. Prepared
-immutable, coalescing, full-height-client, and lower-clock profiles are
-experiments, not confirmed fixes.
+The 96 submissions versus 98 frame transfers differ by trace-boundary work,
+while the ten short panel-window commands are accounted for separately. This
+is materially different from stock's one full-screen, precomposed `BG16`
+submission per animation frame.
+
+Evidence:
+[`2026-11-01-03-gsi-adb-root.md`](../findings/2026-11-01-03-gsi-adb-root.md)
+and `../../evidence/captures/gsi-rooted/spi-one-key.txt`.
+
+## Full-screen client control
+
+A minimal hardware-accelerated full-screen Android client initially produced a
+correct, stable physical blue/yellow pattern. One D-pad event changed the
+logical output to green/magenta and produced:
+
+- six plane updates;
+- four framebuffer submissions: two `240x21` and two `240x320`;
+- `AB24` with 1024-byte pitch for all four submissions;
+- five frame transfers plus five commands from one full-window reset.
+
+The physical panel showed the new pattern briefly, jumped around, and ended
+backlit gray. Android's post-failure screenshot remained the correct
+green/magenta output. The workload reduced the prior GSI burst from 96
+framebuffer submissions to four, but still did not deliver one composed frame
+for the one intended state change, and the panel remained unstable.
+
+This closes the pre-patch trace gate: submission geometry and count change
+with the Android workload, frame transfers follow submissions within boundary
+work, and multiple independent submissions remain destructive even for a
+controlled full-screen client.
+
+Evidence:
+[`2026-11-01-04-fullscreen-client-control.md`](../findings/2026-11-01-04-fullscreen-client-control.md)
+and `../../evidence/captures/gsi-fullscreen-control/spi-one-key.txt`.
+
+The root/tracefs gate passes through the GSI's built-in Rooted debugging
+control. Prepared immutable, coalescing, full-height-client, and lower-clock
+profiles remain experiments, not confirmed fixes; each still requires a
+single-variable, hash-locked, read-back-verified test.

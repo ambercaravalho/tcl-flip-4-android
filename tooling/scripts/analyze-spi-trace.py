@@ -11,6 +11,7 @@ EVENT_RE = re.compile(
     r"(?P<event>\w+):\s*(?P<fields>.*)$"
 )
 FIELD_RE = re.compile(r"(\w+)=(0x[0-9a-fA-F]+|-?\d+)")
+SPI_DONE_CALLER_RE = re.compile(r"spi_done:\s+\((?P<caller>[\w.]+)")
 
 
 def fourcc(value: int) -> str:
@@ -34,6 +35,7 @@ def main() -> None:
     args = parser.parse_args()
 
     events: list[tuple[float, str, dict[str, int]]] = []
+    spi_done_callers: collections.Counter[str] = collections.Counter()
     with open(args.trace, encoding="utf-8", errors="replace") as trace:
         for line in trace:
             match = EVENT_RE.search(line)
@@ -46,8 +48,12 @@ def main() -> None:
             events.append(
                 (float(match.group("timestamp")), match.group("event"), fields)
             )
+            caller_match = SPI_DONE_CALLER_RE.search(line)
+            if caller_match:
+                spi_done_callers[caller_match.group("caller")] += 1
 
     counts = collections.Counter(event for _, event, _ in events)
+    input_transitions: collections.Counter[tuple[int, int]] = collections.Counter()
     updates = collections.Counter()
     windows = collections.Counter()
     te_times: list[float] = []
@@ -75,6 +81,8 @@ def main() -> None:
                     fourcc(fmt),
                 )
             ] += 1
+        elif event == "input" and fields.get("type") == 1:
+            input_transitions[(fields.get("code", -1), fields.get("value", -1))] += 1
         elif event == "te":
             te_times.append(timestamp)
             last_te = timestamp
@@ -113,6 +121,12 @@ def main() -> None:
     print("panel window resets:")
     for (xres, yres), count in windows.most_common():
         print(f"  {count}x full-window={xres}x{yres}")
+    print("input key transitions:")
+    for (code, value), count in sorted(input_transitions.items()):
+        print(f"  {count}x code={code} value={value}")
+    print("SPI completion callers:")
+    for caller, count in spi_done_callers.most_common():
+        print(f"  {count}x {caller}")
 
     te_intervals = [
         current - previous for previous, current in zip(te_times, te_times[1:])

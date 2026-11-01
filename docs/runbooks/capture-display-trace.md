@@ -66,7 +66,20 @@ Compare the GSI result with
 full-screen BG16 plane updates and 18 transfers, with median 25.016 ms SPI and
 16.746 ms TE intervals.
 
-Do not flash an SPI driver variant until the GSI trace demonstrates the
-predicted contract difference. Prepared profiles are documented in
+The first GSI comparison is
+`../../evidence/captures/gsi-rooted/spi-one-key.txt`: 96 framebuffer
+submissions, including 93 full-screen and three `31x14` `AB24` planes, produced
+98 frame transfers plus ten separately identified panel-window commands.
+
+The controlled full-screen client is recorded in
+`../../evidence/captures/gsi-fullscreen-control/spi-one-key.txt`: one intended
+transition produced four framebuffer submissions and five frame transfers,
+then left the physical panel backlit gray while the Android screenshot
+remained correct. This completes the comparison prerequisite; it does not
+validate a patch.
+
+Prepared profiles are documented in
 [`../reference/spi-display-path.md`](../reference/spi-display-path.md), but
-they are not established fixes.
+they are not established fixes. Before testing one, begin a new finding and
+apply every write, read-back, backup, and rollback gate in the applicable
+flashing runbook.
