@@ -1,7 +1,7 @@
 # Build and publish a release
 
-This is a maintainer runbook. Community installers should use the versioned
-[installation guide](../guides/install-v0.1.0.md).
+This is a maintainer runbook. Community installers should use the
+[installation guide](../guides/install.md).
 
 ## Inputs
 

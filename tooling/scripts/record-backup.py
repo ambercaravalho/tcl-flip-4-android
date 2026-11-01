@@ -7,14 +7,8 @@ import argparse
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-import runpy
 
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-INSTALLER = runpy.run_path(
-    str(REPO_ROOT / "tooling/scripts/install-release.py")
-)
-MANIFEST_PATH = REPO_ROOT / "tooling/releases/v0.1.0.json"
+import t440w_install_lib as install
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,22 +31,7 @@ def main() -> int:
     if not identity_log.is_file():
         raise SystemExit(f"error: EDL identity log not found: {identity_log}")
 
-    load_json = INSTALLER["load_json"]
-    validate_manifest = INSTALLER["validate_manifest"]
-    read_gpt = INSTALLER["read_gpt"]
-    verify_reference_gpt = INSTALLER["verify_reference_gpt"]
-    gpt_geometry_sha256 = INSTALLER["gpt_geometry_sha256"]
-    parse_edl_identity = INSTALLER["parse_edl_identity"]
-    sha256_file = INSTALLER["sha256_file"]
-    backup_receipt_path = INSTALLER["backup_receipt_path"]
-
-    if (
-        sha256_file(MANIFEST_PATH)
-        != INSTALLER["EXPECTED_MANIFEST_SHA256"]
-    ):
-        raise SystemExit("error: tracked v0.1.0 release manifest was modified")
-    manifest = load_json(MANIFEST_PATH)
-    assets = validate_manifest(manifest)
+    manifest, assets = install.load_release()
     expected_size = (
         manifest["device"]["total_sectors"]
         * manifest["device"]["sector_size"]
@@ -63,25 +42,25 @@ def main() -> int:
             f"expected {expected_size}"
         )
 
-    primary = read_gpt(image)
-    secondary = read_gpt(
+    primary = install.read_gpt(image)
+    secondary = install.read_gpt(
         image, header_lba=manifest["device"]["total_sectors"] - 1
     )
     if primary != secondary:
         raise SystemExit("error: primary and backup GPT geometry differ")
-    verify_reference_gpt(primary, manifest, assets)
-    geometry_digest = gpt_geometry_sha256(primary)
-    identity = parse_edl_identity(
+    install.verify_reference_gpt(primary, manifest, assets)
+    geometry_digest = install.gpt_geometry_sha256(primary)
+    identity = install.parse_edl_identity(
         identity_log.read_text(encoding="utf-8", errors="replace"), manifest
     )
 
-    receipt_path = backup_receipt_path(image)
+    receipt_path = install.backup_receipt_path(image)
     if receipt_path.exists() and not args.force:
         raise SystemExit(
             f"error: receipt already exists: {receipt_path}; use --force "
             "only after confirming this is the same backup session"
         )
-    digest = sha256_file(image, progress_label="full eMMC backup")
+    digest = install.sha256_file(image, progress_label="full eMMC backup")
     receipt = {
         "schema": 1,
         "created_utc": datetime.now(timezone.utc).isoformat(),
