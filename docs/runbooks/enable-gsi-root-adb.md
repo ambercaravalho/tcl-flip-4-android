@@ -1,5 +1,8 @@
 # Enable GSI rooted debugging
 
+> Research only. Do not use this on the `v0.1.0` release, whose accepted
+> profile requires authenticated non-root ADB and Magisk app grants.
+
 Use this only when the booted GSI provides Lineage/crDroid
 `adbroot_service`. It does not apply to stock KaiOS or to a generic AOSP GSI
 without that service.

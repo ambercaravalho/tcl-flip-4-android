@@ -19,6 +19,7 @@ edl_config.json
 # Partition / image work: carved/patched images + unpack trees (generated, can be huge)
 artifacts/build/
 artifacts/downloads/
+artifacts/releases/
 
 # Build / auxiliary tools: ignore compiled binaries and local scratch tools,
 # but keep our source tool and the vendored AOSP avbtool, test keys, and mkbootimg.

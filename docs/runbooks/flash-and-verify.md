@@ -3,6 +3,11 @@
 Writing the wrong sectors can permanently brick the phone. Stop if the device,
 slot, GPT, source hashes, or rollback path differs from the session record.
 
+For the public `v0.1.0` image set, use the frozen
+[installation guide](../guides/install-v0.1.0.md) and
+`tooling/scripts/install-release.py`. The examples below are the generic
+protocol reference, not a complete release write set.
+
 ## Preconditions
 
 - User confirms the phone is in EDL mode.

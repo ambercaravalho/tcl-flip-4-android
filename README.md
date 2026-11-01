@@ -1,24 +1,24 @@
-# TCL Flip 4 5G Android bringup
+# T440W Android 14
 
-Research, evidence, and tooling for running full Android 14 on the TCL Flip 4
-5G (T440W) while retaining its stock Android 14 GKI kernel and Qualcomm vendor
-BSP.
+An experimental Android 14 ROM for the TCL Flip 4 5G / Go Flip 5G (T440W).
+The `v0.1.0` alpha release has a stable physical display, keypad navigation,
+toggleable D-pad cursor, microG, Aurora Store, and Magisk-managed application
+root. It boots locked/green on the stock Android 14 kernel and Qualcomm vendor
+stack; no bootloader unlock or data wipe is intended.
 
-The device's locked bootloader trusts public AOSP test keys across the relevant
-AVB chain, making a verified userspace replacement possible without a
-bootloader unlock. Android boots, and a retained full-height SPI profile paired
-with forced SurfaceFlinger client composition now renders correctly and
-stably.
+This release has been installed and validated on one T-Mobile T440W. It is not
+validated on other TCL flip-phone models, carrier variants, storage layouts, or
+firmware bases.
 
 For stock KaiOS root research, use
 [tcl-flip-4-root](https://github.com/ambercaravalho/tcl-flip-4-root).
 
-## Warning
+## Read this before installing
 
-This is experimental work on one reference phone. EDL writes can permanently
-brick a device. Keep a full verified backup outside this repository, inspect
-every command, and stop when the observed state differs from the documented
-preconditions.
+Qualcomm EDL writes can permanently brick a phone. Before any write, make a
+full verified eMMC backup and copy it to protected storage outside this
+repository. The current stock rollback requires that full backup; a
+metadata-only rollback is not sufficient.
 
 The T440W firehose rule is absolute:
 
@@ -27,17 +27,46 @@ The T440W firehose rule is absolute:
 - every write is read back and compared before reboot.
 
 Name-based writes have falsely reported success for `vbmeta_system_b` and
-`vbmeta_b`. Use raw writes at the verified LBAs in the runbook.
+`vbmeta_b`. The release installer uses raw sectors, reads every write back, and
+refuses to continue after a mismatch. Do not substitute hand-written commands
+unless you understand the complete write and rollback sets.
 
-## Start here
+The AVB chain is signed with public AOSP test keys. It verifies and boots
+locked/green, but it is not a private production trust anchor.
 
-Read [`docs/README.md`](docs/README.md). It contains the current state, required
-reading order, chronological session findings, durable references, runbooks,
-and the “do not infer” checks.
+## Install
 
-Future agents must also follow [`AGENTS.md`](AGENTS.md).
+1. Read the complete [`v0.1.0` installation guide](docs/guides/install-v0.1.0.md).
+2. Install host dependencies with `tooling/scripts/setup.sh`.
+3. Download every `v0.1.0` release asset and verify it with the tracked release
+   manifest.
+4. Enter EDL, make the mandatory full backup, and run the guarded installer.
+5. Complete the post-boot physical and security checks before relying on the
+   phone.
 
-## Device summary
+The release targets slot B and the exact reference T440W GPT geometry. The
+installer starts in read-only plan mode, binds the full backup receipt to the
+connected phone's chip/eMMC serials, and requires a typed confirmation before
+the flash phase. Slot B must already be active; the installer never modifies
+GPT slot metadata.
+
+## What works
+
+- Android 14 / SDK 34 `a64_bvN` userspace
+- stable 240x320 physical display with forced client composition
+- physical Back, Home, Messages, and D-pad navigation
+- C9 cursor toggle, movement, click, and conditional scrolling
+- hidden on-screen navigation bar
+- enforcing SELinux and authenticated, non-root ADB
+- Magisk 31.1 application root, denied by default until explicitly granted
+- microG Services and Companion
+- Aurora Store anonymous browsing, downloads, and Session Installer
+
+Telephony, carrier behavior, cameras, Bluetooth, and every daily-use workload
+have not received a release acceptance gate. Treat anything not listed above
+as unverified rather than working.
+
+## Supported target
 
 - Model: T440W (`gflip5gtmo` / `pitti_32go`)
 - Base: Android 14 / SDK 34, Linux `6.1.90-android14`
@@ -49,8 +78,12 @@ Future agents must also follow [`AGENTS.md`](AGENTS.md).
 - EDL USB ID: `05c6:9008`
 - Display: 240x320 ST7789P3 over a private Qualcomm/TCL SPI DRM path
 
+Do not flash if the model, HWID, GPT geometry, sector size, or release hashes
+differ from the guide.
+
 ## Repository layout
 
+- `docs/guides/` — versioned community install and usage guides
 - `docs/findings/` — chronological session evidence and conclusions
 - `docs/reference/` — durable device, AVB, EDL, and SPI facts
 - `docs/runbooks/` — guarded repeatable procedures
@@ -66,75 +99,37 @@ Future agents must also follow [`AGENTS.md`](AGENTS.md).
 - `tooling/loader/` — signed T440W firehose programmer
 - `tooling/linux/` — Linux udev rules
 
-## Host setup
+## After installation
+
+Read [Using the ROM](docs/guides/using-the-rom.md) for keypad controls,
+first-boot setup, Magisk Manager, microG, Aurora Store, and the expected
+non-root ADB security state.
+
+Magisk Manager is carried in the image outside Android's package-scan
+directories. Install it normally only after the flash read-backs and release
+boot gates pass:
 
 ```bash
-tooling/scripts/setup.sh
+adb shell pm install -r -g \
+  /system/etc/t440w/release/Magisk-v31.1.apk
 ```
 
-On Linux:
+Application root is denied by default. Grant it per app in Manager; ADB shell
+must remain unprivileged.
 
-```bash
-sudo cp tooling/linux/51-edl.rules tooling/linux/50-android.rules \
-  /etc/udev/rules.d/
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
+## Build and research
 
-Check for an EDL device:
+- [Documentation hub](docs/README.md)
+- [Build and release runbook](docs/runbooks/build-and-release.md)
+- [Accepted release components](docs/reference/release-components.md)
+- [Release evidence](docs/findings/2026-11-01-10-rooted-release-stack.md)
+- [Partition and AVB reference](docs/reference/partitions-and-avb.md)
 
-```bash
-tooling/scripts/check-device.sh
-```
+The findings directory remains the chronological evidence record. It is useful
+for porting and auditing, but community installers should follow the frozen
+release guide rather than reconstructing commands from a research session.
 
-Make the mandatory full backup:
-
-```bash
-tooling/scripts/backup.sh
-```
-
-## Current research state
-
-- Clean Android 14 `treble_a64_bvN` boots on slot B.
-- The stock SPI bridge is unstable when Android supplies independent hardware
-  planes because it treats each plane as a complete frame.
-- Correct host screenshots place the defect after logical composition.
-- The stock binary calls the SPI framebuffer update once per DRM plane while
-  assuming every input is a full-screen precomposed RGB565 frame.
-- Stock KaiOS actually supplies that contract: one full-screen BG16 plane per
-  animation frame.
-- The GSI's built-in Rooted debugging setting provides root adbd and writable
-  tracefs without changing `ro.debuggable=0`.
-- The matching GSI trace confirms the contract violation: one D-pad event
-  generated 96 `AB24` framebuffer submissions and 98 frame transfers, versus
-  stock's 16 `BG16` submissions and 18 transfers.
-- A controlled full-screen client reduced one transition to four submissions,
-  but the panel still jumped and ended backlit gray while the Android
-  screenshot remained correct.
-- An immutable driver control kept the same submissions and transfers but
-  prevented changing plane contents from replacing the staging frame; the
-  physical panel stayed stable gray. Transfer cadence alone is not sufficient
-  to cause the failure.
-- A pending-counter coalescing control reduced five transfers to four and
-  remained physically incorrect; it did not establish an atomic-commit
-  boundary.
-- The full-height-client driver still failed under default composition. With
-  SurfaceFlinger forced to client composition, one controlled transition
-  became one full-height client-target submission and remained correct and
-  stable. The animated Lineage welcome screen also passed.
-- The full-height driver and matching vbmeta are retained. A bounded ODM init
-  helper now reapplies forced client composition during startup and exits after
-  one minute. Normal reboot and SurfaceFlinger restart both passed.
-- Physical Back, Home, Messages, and a toggleable D-pad cursor now make the GSI
-  fully operable without touch. The cursor app is baked into system, reserved
-  softkeys are inert by default, and the on-screen navigation bar is disabled.
-- Android setup is complete. The keypad/cursor and stable-display profiles both
-  passed a final full-reboot gate.
-- Lineage testing overwrote Region A; metadata-only rollback is no longer
-  sufficient.
-
-The persistent display and physical-keypad profiles are now the device
-baseline.
+Future agents and maintainers must also follow [AGENTS.md](AGENTS.md).
 
 ## Credits and license
 

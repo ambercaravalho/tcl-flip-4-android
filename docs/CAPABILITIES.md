@@ -195,7 +195,8 @@ tooling/scripts/edl reset --loader=tooling/loader/flip-4-edl.bin
 
 Caveat: on this loader the software reset is unreliable (it needs the read
 workaround the `reset` subcommand doesn't expose). The reliable way to leave EDL
-mode is to **pull the battery for ~10 seconds and power on**.
+mode on this non-removable-battery phone is to **hold Power for roughly 10
+seconds until it vibrates/reboots**.
 
 ### Low-level memory / fuses (ADVANCED)
 

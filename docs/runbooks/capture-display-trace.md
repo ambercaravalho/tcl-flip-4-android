@@ -1,5 +1,8 @@
 # Capture a display baseline and SPI trace
 
+> Research only. The `v0.1.0` release intentionally disables root ADB and
+> trace collection; enabling them changes the accepted security profile.
+
 Use this runbook only on a booted, authorized ADB device. A baseline capture can
 run without full root, but kernel kprobes require root adbd and writable
 tracefs.

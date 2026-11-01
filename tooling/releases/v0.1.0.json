@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "release": "v0.1.0",
+  "device": {
+    "model": "T440W",
+    "product": "gflip5gtmo",
+    "platform": "pitti_32go",
+    "hwid": "0x002980e100420071",
+    "usb_id": "05c6:9008",
+    "sector_size": 512,
+    "total_sectors": 61079552,
+    "gpt_geometry_sha256": "57330275a169bc94209b72ee5c1902153d57c6225b4e8d78ead999a4f2a88a97",
+    "super_sectors": 6291456,
+    "target_slot": "b"
+  },
+  "loader": {
+    "path": "tooling/loader/flip-4-edl.bin",
+    "sha256": "4161aae496c91a584c58542cc539f9538f8ff5281f470eba18dd49b004020e0a"
+  },
+  "assets": [
+    {
+      "name": "init_boot_b-magisk.img",
+      "source": "artifacts/build/rooted-release/magisk/init_boot_b-magisk.img",
+      "sha256": "2a660a1eaadfcab823f33fa86bb9ed09cbf099bbcaa902286e6093f02ef87efc",
+      "size": 8388608,
+      "raw_lba": 3350528,
+      "sectors": 16384,
+      "target": "init_boot_b",
+      "kind": "payload"
+    },
+    {
+      "name": "system_b_extent0.img",
+      "source": "artifacts/build/rooted-release/final-release-v2/system_b_extent0.img",
+      "sha256": "ab110b2ffbe3677cd41b69ae55d9d164c6a0548f86d7187a9cccc8c6c1991b0e",
+      "size": 635351040,
+      "raw_lba": 3698688,
+      "sectors": 1240920,
+      "target": "system_b_extent0",
+      "kind": "payload"
+    },
+    {
+      "name": "system_b_extent1.img",
+      "source": "artifacts/build/rooted-release/final-release-v2/system_b_extent1.img",
+      "sha256": "0588e3523bfa663109ddb0be8c3ebe78e0a2d11a7f308085e939db8579a960f4",
+      "size": 1709264896,
+      "raw_lba": 6254592,
+      "sectors": 3338408,
+      "target": "system_b_extent1",
+      "kind": "payload"
+    },
+    {
+      "name": "vendor_dlkm_b-full-height-client.img",
+      "source": "artifacts/build/spi-driver-tests/vendor_dlkm_b-full-height-client.img",
+      "sha256": "ac2f2a35dc3e21f38ba51f8e8076812cbddea7b31ef7959f2d929f94b5bba116",
+      "size": 53796864,
+      "raw_lba": 6137856,
+      "sectors": 105072,
+      "target": "vendor_dlkm_b",
+      "kind": "payload"
+    },
+    {
+      "name": "odm_b-rooted-release.img",
+      "source": "artifacts/build/rooted-release/final-release-v2/odm_b-rooted-release.img",
+      "sha256": "fc8039c407fdd41328d02e66c5b2a02e48bc857ea2adba3c274550b80178a437",
+      "size": 1470464,
+      "raw_lba": 3688448,
+      "sectors": 2872,
+      "target": "odm_b",
+      "kind": "payload"
+    },
+    {
+      "name": "super_meta_android.img",
+      "source": "artifacts/build/rooted-release/final-release-v2/super_meta_android.img",
+      "sha256": "730246d306c90aa474eb75e0d346c2ee9eeec49726d9171dc70f51c5ef85eecf",
+      "size": 524288,
+      "raw_lba": 3686400,
+      "sectors": 1024,
+      "target": "super_metadata",
+      "kind": "metadata"
+    },
+    {
+      "name": "vbmeta_system_b-rooted-release.img",
+      "source": "artifacts/build/rooted-release/final-release-v2/vbmeta_system_b-rooted-release.img",
+      "sha256": "852ce9b924b61171900a6acd88700c887b5bf73663f487a82a6afd50821171ea",
+      "size": 65536,
+      "raw_lba": 2080768,
+      "sectors": 128,
+      "target": "vbmeta_system_b",
+      "kind": "verification"
+    },
+    {
+      "name": "vbmeta_b-rooted-release.img",
+      "source": "artifacts/build/rooted-release/final-release-v2/vbmeta_b-rooted-release.img",
+      "sha256": "734030bc9080e14037ec0ef76b00fa1b785828a43a3b95e32c13adad6ed9852b",
+      "size": 65536,
+      "raw_lba": 3377152,
+      "sectors": 128,
+      "target": "vbmeta_b",
+      "kind": "verification"
+    }
+  ]
+}

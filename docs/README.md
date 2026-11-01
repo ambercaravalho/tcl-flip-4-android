@@ -10,75 +10,33 @@ This repository records the effort to run Android 14 on the TCL Flip 4 5G
 - [`runbooks/`](runbooks/) contains guarded, repeatable procedures. A runbook is
   not evidence that a procedure succeeded on a particular boot.
 
-## Current state
+## Community documentation
 
-Last recorded device state: Android 14 `treble_a64_bvN-userdebug` on slot B,
-locked/green, with the verified full-height-client SPI module and matching
-current-derived vbmeta retained. The accepted enforcing release profile uses
-authenticated non-root ADB; `ro.debuggable=0`, `ro.force_debuggable` is empty,
-`service.adb.root=0`, shell `su` is denied, and trace collection is disabled.
-Magisk 31.1 provides explicit per-application root from patched `init_boot_b`;
-Manager is installed normally under `/data/app`.
+The accepted `v0.1.0` profile is Android 14 on slot B, locked/green and
+SELinux-enforcing, with a stable display, physical keypad/C9 cursor, microG,
+Aurora Store, authenticated non-root ADB, and Magisk-managed application root.
+It has been validated on one reference T440W.
 
-The first equivalent GSI SPI trace is now captured. One D-pad event produced
-96 framebuffer submissions: 93 full-screen and three `31x14`, all `AB24` with
-1024-byte pitch. It generated 98 frame SPI transfers plus ten panel-window
-commands. This contrasts with stock's 16 full-screen `BG16` submissions and 18
-frame transfers, and directly confirms the multi-plane/format contract
-mismatch on the flickering GSI.
+- [Install `v0.1.0`](guides/install-v0.1.0.md)
+- [Use the ROM](guides/using-the-rom.md)
+- [Backup and restore](runbooks/backup-and-restore.md)
+- [Generic flash protocol](runbooks/flash-and-verify.md)
 
-The controlled full-screen-client gate is also complete. One intended visual
-transition produced four framebuffer submissions—two `240x21` and two
-`240x320`—and five frame transfers. The physical panel briefly changed, then
-jumped and ended backlit gray, while Android's screenshot remained correct.
-Reducing the burst from 96 submissions to four was not sufficient; the private
-bridge still received multiple independent planes instead of one composed
-frame.
+Community installers should use the versioned guide and release manifest.
+Findings document how the result was reached; they are not a substitute for a
+frozen release procedure.
 
-The immutable driver control preserved the same four submissions and five
-frame transfers while preventing new per-plane contents from replacing the
-RGB565 staging frame. Android still rendered correctly, and the physical panel
-remained stable gray instead of jumping. This ruled out transfer cadence alone
-as a sufficient explanation.
+## Maintainer documentation
 
-The pending-counter coalescing control also failed. It reduced five frame
-transfers to four, not approximately one, because the worker consumes pending
-before later planes arrive. Its physical output remained stale and corrupted.
+- [Build and publish a release](runbooks/build-and-release.md)
+- [Prepare a GSI](runbooks/prepare-gsi.md)
+- [Release components](reference/release-components.md)
+- [Partitions and AVB](reference/partitions-and-avb.md)
 
-The retained full-height-client driver failed under default Android
-composition, but passed when SurfaceFlinger was forced to client composition.
-The same controlled key transition then became one full-height client-target
-submission and remained physically correct and stable. An animated Lineage
-welcome redraw also used only full-height client targets and was directly
-confirmed correct and stable.
-
-This is the first validated stable GSI display configuration. Forced client
-composition is now persistent through a bounded ODM init helper that reasserts
-transaction `1008` during the first minute after each SurfaceFlinger start,
-then exits. It passed normal-reboot, SurfaceFlinger-restart, controlled-client,
-and Lineage Setup physical gates.
-
-The physical keypad profile is also persistent and Android setup is complete.
-Back, Home, and inert app-reserved softkeys are static keylayout mappings. A
-baked versioned AccessibilityService supplies Messages and delegates cursor
-toggle to the accepted C9 service; C9 supplies movement, click, and conditional
-scrolling. The on-screen navigation bar is absent. The complete keypad,
-cursor, navigation, reboot, and stable-display gates passed.
-
-The rooted release stack also includes system microG Services and Companion,
-non-privileged system Aurora Store, and an image-carried Magisk Manager
-installer outside Android's package-scan directories. The final image set is
-byte-reproducible. Its AVB chain verifies but remains anchored in public AOSP
-test keys.
-
-Lineage testing used both free `super` regions and overwrote the old stock
-system sectors in Region A. A metadata-only rollback is no longer sufficient;
-restoring stock requires the full eMMC backup or the affected system sectors.
-
-The persistent full-height/client-composition and physical-keypad profiles are
-now the device baseline. Any future image rebuild must preserve the
-full-height vendor-DLKM, bounded ODM helper, keypad system package, final
-keylayouts, and early PHH mainkeys policy.
+The accepted image set is byte-reproducible and its AVB chain verifies, but the
+chain is anchored in public AOSP test keys. Region A was overwritten during
+development, so restoring the reference phone to stock requires its verified
+full eMMC backup rather than a metadata-only rollback.
 
 ## Read this before device work
 
@@ -136,8 +94,10 @@ session.
 
 ## Runbooks
 
-- [`runbooks/prepare-gsi.md`](runbooks/prepare-gsi.md)
-- [`runbooks/flash-and-verify.md`](runbooks/flash-and-verify.md)
-- [`runbooks/backup-and-restore.md`](runbooks/backup-and-restore.md)
-- [`runbooks/capture-display-trace.md`](runbooks/capture-display-trace.md)
-- [`runbooks/enable-gsi-root-adb.md`](runbooks/enable-gsi-root-adb.md)
+- Community: [`runbooks/flash-and-verify.md`](runbooks/flash-and-verify.md)
+  and [`runbooks/backup-and-restore.md`](runbooks/backup-and-restore.md)
+- Maintainer: [`runbooks/prepare-gsi.md`](runbooks/prepare-gsi.md) and
+  [`runbooks/build-and-release.md`](runbooks/build-and-release.md)
+- Research only:
+  [`runbooks/capture-display-trace.md`](runbooks/capture-display-trace.md) and
+  [`runbooks/enable-gsi-root-adb.md`](runbooks/enable-gsi-root-adb.md)

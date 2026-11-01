@@ -13,15 +13,17 @@ tooling/scripts/check-device.sh
 tooling/scripts/backup.sh artifacts/backups/flip4-full-emmc.img
 ```
 
-The script performs a read-only full dump, checks 512-byte alignment, and
-requires both primary and backup GPT signatures. Record the final SHA-256 and
-copy the image off the working machine.
+The script performs a read-only full dump, validates the primary and backup GPT
+headers/tables and their CRCs, hashes the complete image, and writes an adjacent
+`.receipt.json` binding that hash to the EDL chip/eMMC serials. Copy both the
+image and receipt off the working machine.
 
 The repository path may be a symlink to the prior `tcl-flip-4-root` workspace.
 Verify it resolves before relying on it:
 
 ```bash
 test -e artifacts/backups/flip4-full-emmc.img
+test -e artifacts/backups/flip4-full-emmc.img.receipt.json
 shasum -a256 artifacts/backups/flip4-full-emmc.img
 ```
 
