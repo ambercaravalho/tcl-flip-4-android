@@ -250,3 +250,9 @@ client and Lineage/SystemUI gates. Until then, after any reboot, reapply
 `service call SurfaceFlinger 1008 i32 1` before relying on the physical panel.
 To abandon this profile, restore both raw ranges from the selected verified
 rollback and read them back before reboot.
+
+## Dated correction: 2026-11-01
+
+The battery-removal EDL-exit wording is incorrect. The T440W reference phone
+has a non-removable battery; session 08 verified exit by holding Power for
+roughly ten seconds until vibration/reboot.

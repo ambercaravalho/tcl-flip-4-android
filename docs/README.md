@@ -49,19 +49,20 @@ submission and remained physically correct and stable. An animated Lineage
 welcome redraw also used only full-height client targets and was directly
 confirmed correct and stable.
 
-This is the first validated stable GSI display configuration. The driver and
-vbmeta persist, but forced client composition was enabled with
-`service call SurfaceFlinger 1008 i32 1`; that runtime setting resets on reboot
-or SurfaceFlinger restart.
+This is the first validated stable GSI display configuration. Forced client
+composition is now persistent through a bounded ODM init helper that reasserts
+transaction `1008` during the first minute after each SurfaceFlinger start,
+then exits. It passed normal-reboot, SurfaceFlinger-restart, controlled-client,
+and Lineage Setup physical gates.
 
 Lineage testing used both free `super` regions and overwrote the old stock
 system sectors in Region A. A metadata-only rollback is no longer sufficient;
 restoring stock requires the full eMMC backup or the affected system sectors.
 
-The next safe research step is to make forced client composition reproducible
-at boot without changing another display variable, then reboot and repeat the
-controlled-client and Lineage/SystemUI gates. Until that is validated, reapply
-the runtime service call after any restart before relying on the panel.
+The persistent full-height/client-composition pair is now the display baseline.
+The next device session can continue Lineage setup without another display
+change. Any future image rebuild must preserve both the full-height
+vendor-DLKM and the bounded ODM helper.
 
 ## Read this before device work
 
@@ -102,6 +103,7 @@ the runtime service call after any restart before relying on the panel.
 - [`2026-11-01-05-spi-driver-control-selection.md`](findings/2026-11-01-05-spi-driver-control-selection.md)
 - [`2026-11-01-06-spi-coalescing-control.md`](findings/2026-11-01-06-spi-coalescing-control.md)
 - [`2026-11-01-07-spi-full-height-client.md`](findings/2026-11-01-07-spi-full-height-client.md)
+- [`2026-11-01-08-persistent-client-composition.md`](findings/2026-11-01-08-persistent-client-composition.md)
 
 Use [`findings/SESSION_TEMPLATE.md`](findings/SESSION_TEMPLATE.md) for the next
 session.

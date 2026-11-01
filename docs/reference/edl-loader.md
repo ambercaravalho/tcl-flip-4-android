@@ -46,6 +46,9 @@ See the compatibility document [`../PATCHES.md`](../PATCHES.md).
 
 ## Known control behavior
 
-Software reset is unreliable with this programmer. The known reliable exit
-from EDL is to remove the battery for approximately ten seconds, reinstall it,
-and power on.
+Software reset is unreliable with this programmer. The T440W reference phone
+has a non-removable battery. The verified EDL exit is to hold Power for roughly
+ten seconds until the phone vibrates and reboots.
+
+Evidence:
+[`2026-11-01-08-persistent-client-composition.md`](../findings/2026-11-01-08-persistent-client-composition.md).

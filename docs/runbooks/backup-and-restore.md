@@ -59,8 +59,8 @@ physical unit and has a valid GPT at both ends.
 
 Writes omit `--skipresponse`. Read restored targets back with
 `--skipresponse`, compare exact bytes/hashes, and only then leave EDL. A
-software reset is unreliable; the known exit is a battery removal of roughly
-ten seconds followed by normal power-on.
+software reset is unreliable. On the non-removable-battery T440W, hold Power
+for roughly ten seconds until vibration/reboot.
 
 See [`flash-and-verify.md`](flash-and-verify.md) and
 [`../reference/partitions-and-avb.md`](../reference/partitions-and-avb.md).

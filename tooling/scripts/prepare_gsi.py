@@ -448,6 +448,16 @@ def build_odm_android_image(
                 os.path.join(REPO_ROOT, "device", "t440w", "init", "init.t440w.debug.rc"),
                 f"{work}/init.t440w.debug.rc",
             )
+            shutil.copyfile(
+                os.path.join(
+                    REPO_ROOT,
+                    "device",
+                    "t440w",
+                    "init",
+                    "t440w-force-client-composition.sh",
+                ),
+                f"{work}/t440w-force-client-composition.sh",
+            )
 
         # Build debugfs script to update odm.img (expanded to 348 blocks = 1,425,408 B,
         # which fits comfortably inside the 1,470,464 B odm partition with AVB footer)
@@ -491,6 +501,16 @@ def build_odm_android_image(
         ]
         if usb_diagnostics:
             dbg_cmds.extend([
+                "mkdir /bin",
+                "sif /bin mode 040755",
+                "sif /bin uid 0",
+                "sif /bin gid 0",
+                "ea_set -f /work/ctx.vf.bin /bin security.selinux",
+                "write /work/t440w-force-client-composition.sh /bin/t440w-force-client-composition.sh",
+                "sif /bin/t440w-force-client-composition.sh mode 0100755",
+                "sif /bin/t440w-force-client-composition.sh uid 0",
+                "sif /bin/t440w-force-client-composition.sh gid 0",
+                "ea_set -f /work/ctx.vf.bin /bin/t440w-force-client-composition.sh security.selinux",
                 "mkdir /etc/init",
                 "sif /etc/init mode 040755",
                 "sif /etc/init uid 0",

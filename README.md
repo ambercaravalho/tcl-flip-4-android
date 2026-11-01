@@ -122,14 +122,14 @@ tooling/scripts/backup.sh
   SurfaceFlinger forced to client composition, one controlled transition
   became one full-height client-target submission and remained correct and
   stable. The animated Lineage welcome screen also passed.
-- The full-height driver and matching vbmeta are retained. Forced client
-  composition is runtime-only and must be reapplied after a reboot or
-  SurfaceFlinger restart until persistence is implemented and validated.
+- The full-height driver and matching vbmeta are retained. A bounded ODM init
+  helper now reapplies forced client composition during startup and exits after
+  one minute. Normal reboot and SurfaceFlinger restart both passed.
 - Lineage testing overwrote Region A; metadata-only rollback is no longer
   sufficient.
 
-The next work is to persist forced client composition at boot as a
-single-variable change, then reboot and repeat both physical display gates.
+The persistent full-height/client-composition pair is now the display baseline.
+The next work can continue Android setup without another display change.
 
 ## Credits and license
 

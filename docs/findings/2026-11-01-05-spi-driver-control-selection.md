@@ -409,3 +409,9 @@ exact current `044944e5...29f6` image rather than its stale prepared vbmeta.
 Validate untargeted descriptors before considering a write. The coalescing
 control is the next smaller isolation step; do not jump directly to the
 multi-variable full-height-client profile.
+
+## Dated correction: 2026-11-01
+
+The references to removing/reinstalling the battery are incorrect. The T440W
+reference phone has a non-removable battery; session 08 verified EDL exit by
+holding Power for roughly ten seconds until vibration/reboot.

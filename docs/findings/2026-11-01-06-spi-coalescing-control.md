@@ -241,3 +241,9 @@ derive full-height-client vbmeta from that exact `vbmeta_b`. Treat the next
 test as a filter/stride delta on top of known-insufficient coalescing, not as
 evidence that coalescing met its gate. Preserve the coalescing backup as the
 immediate rollback and the session-06 pre-test backup as the stock rollback.
+
+## Dated correction: 2026-11-01
+
+The battery-removal EDL-exit wording is incorrect. The T440W reference phone
+has a non-removable battery; session 08 verified exit by holding Power for
+roughly ten seconds until vibration/reboot.

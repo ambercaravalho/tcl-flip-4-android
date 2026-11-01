@@ -182,12 +182,39 @@ reported the physical Setup/SystemUI output correct and stable. This proves
 complete composed frame contents, not an exact one-transfer cadence, are the
 decisive requirement for the observed workload.
 
-The full-height driver and matching vbmeta are retained. Forced client
-composition is runtime-only and resets when SurfaceFlinger or the phone
-restarts; persistence has not yet been implemented or reboot-validated.
+The full-height driver and matching vbmeta are retained.
 
 Evidence:
 [`2026-11-01-07-spi-full-height-client.md`](../findings/2026-11-01-07-spi-full-height-client.md),
 `../../evidence/captures/gsi-spi-full-height/spi-one-key-client-composition.txt`,
 and
 `../../evidence/captures/gsi-spi-full-height/spi-lineage-welcome-client-composition.txt`.
+
+## Persistent client composition
+
+The exact GSI SurfaceFlinger does not read the legacy
+`debug.sf.disable_hwc` property. Persistence is implemented instead by a
+device-specific ODM init service that invokes transaction `1008` after every
+SurfaceFlinger start.
+
+One-shot invocations at SurfaceFlinger start, boot completion, and five seconds
+after boot completion were all overwritten by later initialization. The
+validated helper reasserts the control every five seconds for one minute, then
+exits. Hardware composition remains disabled after exit.
+
+The bounded profile passed:
+
+- locked/green normal reboot with the helper stopped afterward;
+- controlled SurfaceFlinger/framework restart with the helper stopped
+  afterward;
+- one full-screen D-pad transition with one `240x320` client submission and
+  two frame transfers;
+- the Lineage Setup physical-output gate.
+
+The user directly reported correct, stable physical output after each gate.
+Persistence changes only ODM and its top-level vbmeta descriptor; the
+full-height driver remains unchanged.
+
+Evidence:
+[`2026-11-01-08-persistent-client-composition.md`](../findings/2026-11-01-08-persistent-client-composition.md)
+and `../../evidence/captures/gsi-spi-persistence/`.
