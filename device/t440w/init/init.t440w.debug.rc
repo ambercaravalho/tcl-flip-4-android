@@ -1,0 +1,18 @@
+# Bring-up-only USB fallback for the TCL Flip 4 5G.
+#
+# The stock vendor image selects the AIDL USB gadget HAL. A generic system
+# image can boot before that HAL receives a usable function configuration,
+# leaving the USB port unenumerated. Force the vendor's supported legacy
+# ConfigFS path and an unauthenticated ADB-only composition so early bring-up
+# logs remain available.
+
+on post-fs-data
+    setprop persist.sys.usb.config adb
+    setprop persist.vendor.usb.config adb
+
+on zygote-start
+    setprop vendor.usb.use_gadget_hal 0
+    setprop persist.sys.usb.config adb
+    setprop persist.vendor.usb.config adb
+    setprop sys.usb.config none
+    setprop sys.usb.config adb

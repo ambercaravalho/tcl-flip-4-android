@@ -2,23 +2,23 @@
 # Make a full raw eMMC backup of the TCL Flip 4 and verify it.
 #
 # This is READ-ONLY on the device. It produces one restorable raw image.
-# Requires the phone to be in EDL mode (run scripts/check-device.sh first).
+# Requires the phone to be in EDL mode (run tooling/scripts/check-device.sh first).
 #
-# Usage: scripts/backup.sh [output-image]
-#   default output: backups/flip4-full-emmc.img
+# Usage: tooling/scripts/backup.sh [output-image]
+#   default output: artifacts/backups/flip4-full-emmc.img
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$DIR"
 
-OUT="${1:-backups/flip4-full-emmc.img}"
-LOADER="loader/flip-4-edl.bin"
+OUT="${1:-artifacts/backups/flip4-full-emmc.img}"
+LOADER="tooling/loader/flip-4-edl.bin"
 
-mkdir -p "$(dirname "$OUT")" logs
+mkdir -p "$(dirname "$OUT")" evidence/logs
 
 echo ">> Dumping full eMMC to $OUT (this takes ~15 min at ~35 MB/s)"
 # --skipresponse is REQUIRED for this loader (see docs/PATCHES.md).
-scripts/edl rf "$OUT" --loader="$LOADER" --memory=emmc --skipresponse | tee "logs/backup.log"
+tooling/scripts/edl rf "$OUT" --loader="$LOADER" --memory=emmc --skipresponse | tee "evidence/logs/backup.log"
 
 echo
 echo ">> Verifying image ..."

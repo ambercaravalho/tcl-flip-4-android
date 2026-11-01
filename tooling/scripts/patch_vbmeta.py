@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Surgically patch one hashtree descriptor in a signed vbmeta or vbmeta_system
-image, then re-sign, leaving every other descriptor byte-identical.
+"""Surgically patch one hashtree or hash descriptor in a signed vbmeta image,
+then re-sign, leaving every other descriptor byte-identical.
 
 This is used to update individual verity descriptors (e.g., `system`,
 `system_ext`, `product` in `vbmeta_system` signed with `testkey_rsa2048.pem`,
@@ -8,11 +8,10 @@ or `odm`, `vendor` in `vbmeta` signed with `testkey_rsa4096.pem`) without
 disturbing other hash/chain descriptors (such as `dtbo`, which has no
 standalone AVB footer).
 
-When `--from-image=<part.img>` is passed (or when `<new_root_digest_hex>` is
-`auto` alongside `--from-image=<part.img>`), `image_size`, `tree_offset`,
-`tree_size`, `fec_num_roots`, `fec_offset`, `fec_size`, `salt`, and
-`root_digest` are all copied from `<part.img>`'s embedded AVB footer so
-partitions whose size changed (such as a GSI `system` image) verify cleanly.
+For a hashtree descriptor, `--from-image=<part.img>` copies its complete AVB
+footer geometry and digest. For a raw hash descriptor such as `dtbo`, it
+computes `hash(salt || image)` and updates `image_size`. Use `auto` as the
+digest argument for either form.
 
 AVB signature == RSA-PKCS1v1.5(SHA256(header || aux)), which is exactly what
 `openssl dgst -sha256 -sign` produces, so we shell out to openssl for signing.
@@ -27,6 +26,7 @@ import subprocess
 import sys
 
 DESC_HASHTREE = 1
+DESC_HASH = 2
 AVB_FOOTER_MAGIC = b"AVBf"
 AVB_FOOTER_SIZE = 64
 
@@ -77,6 +77,52 @@ def read_footer_hashtree_desc(img_path, expected_part):
                 }
         pos += 16 + nbf
     raise SystemExit(f"error: hashtree descriptor '{expected_part}' not found in footer of {img_path}")
+
+
+def find_descriptor(aux, desc_off, desc_size, target):
+    """Return (tag, descriptor fields) for a hash/hashtree partition."""
+    pos = desc_off
+    end = desc_off + desc_size
+    while pos < end:
+        tag, nbf = struct.unpack_from(">QQ", aux, pos)
+        body = pos + 16
+        if tag == DESC_HASHTREE:
+            name_len, salt_len, digest_len = struct.unpack_from(
+                ">LLL", aux, body + 88
+            )
+            name_off = body + 164
+        elif tag == DESC_HASH:
+            name_len, salt_len, digest_len = struct.unpack_from(
+                ">LLL", aux, body + 40
+            )
+            name_off = body + 116
+        else:
+            pos += 16 + nbf
+            continue
+        name = aux[name_off:name_off + name_len].decode()
+        if name == target:
+            return tag, {
+                "body": body,
+                "name_off": name_off,
+                "name_len": name_len,
+                "salt_len": salt_len,
+                "digest_len": digest_len,
+                "salt": aux[
+                    name_off + name_len:name_off + name_len + salt_len
+                ],
+            }
+        pos += 16 + nbf
+    raise SystemExit(f"error: hash/hashtree descriptor '{target}' not found")
+
+
+def calculate_hash_descriptor(image_path, algorithm, salt):
+    digest = hashlib.new(algorithm)
+    digest.update(salt)
+    image_size = os.path.getsize(image_path)
+    with open(image_path, "rb") as image:
+        while chunk := image.read(4 * 1024 * 1024):
+            digest.update(chunk)
+    return image_size, digest.digest()
 
 
 def find_and_patch(aux, desc_off, desc_size, target, new_digest, zero_fec, footer_info=None):
@@ -132,8 +178,29 @@ def find_and_patch(aux, desc_off, desc_size, target, new_digest, zero_fec, foote
                 digest_off = name_off + name_len + salt_len
                 aux[digest_off:digest_off + digest_len] = new_digest
                 return bytes(aux)
+        elif tag == DESC_HASH:
+            # Hash descriptor body: image_size(8)@0, hash_algorithm(32s)@8,
+            # partition_name_len(4)@40, salt_len(4)@44, digest_len(4)@48,
+            # flags(4)@52, reserved(60)@56, name/salt/digest blob @116.
+            name_len, salt_len, digest_len = struct.unpack_from(
+                ">LLL", aux, body + 40
+            )
+            name_off = body + 116
+            name = aux[name_off:name_off + name_len].decode()
+            if name == target:
+                if zero_fec:
+                    raise SystemExit("--zero-fec is invalid for a hash descriptor")
+                if len(new_digest) != digest_len:
+                    raise SystemExit(
+                        f"digest len {len(new_digest)} != expected {digest_len}"
+                    )
+                if footer_info is not None:
+                    struct.pack_into(">Q", aux, body, footer_info["image_size"])
+                digest_off = name_off + name_len + salt_len
+                aux[digest_off:digest_off + digest_len] = new_digest
+                return bytes(aux)
         pos += total
-    raise SystemExit(f"hashtree descriptor '{target}' not found")
+    raise SystemExit(f"hash/hashtree descriptor '{target}' not found")
 
 
 def main(argv):
@@ -145,17 +212,6 @@ def main(argv):
     for a in argv[6:]:
         if a.startswith("--from-image="):
             from_image = a.split("=", 1)[1]
-
-    footer_info = None
-    if from_image:
-        footer_info = read_footer_hashtree_desc(from_image, part)
-        if digest_hex == "auto":
-            new_digest = footer_info["digest"]
-            digest_hex = new_digest.hex()
-        else:
-            new_digest = bytes.fromhex(digest_hex)
-    else:
-        new_digest = bytes.fromhex(digest_hex)
 
     data = open(stock, "rb").read()
     if data[0:4] != b"AVB0":
@@ -174,6 +230,34 @@ def main(argv):
     aux_start = 256 + auth_size
     aux = data[aux_start:aux_start + aux_size]
     total_size = len(data)
+
+    descriptor_tag, descriptor = find_descriptor(
+        aux, desc_off, desc_size, part
+    )
+    footer_info = None
+    if from_image:
+        if descriptor_tag == DESC_HASHTREE:
+            footer_info = read_footer_hashtree_desc(from_image, part)
+            auto_digest = footer_info["digest"]
+        else:
+            algorithm = bytes(
+                aux[
+                    descriptor["body"] + 8:descriptor["body"] + 40
+                ]
+            ).split(b"\x00", 1)[0].decode()
+            image_size, auto_digest = calculate_hash_descriptor(
+                from_image, algorithm, descriptor["salt"]
+            )
+            footer_info = {"image_size": image_size}
+        if digest_hex == "auto":
+            new_digest = auto_digest
+            digest_hex = new_digest.hex()
+        else:
+            new_digest = bytes.fromhex(digest_hex)
+    else:
+        if digest_hex == "auto":
+            raise SystemExit("error: auto requires --from-image=<part.img>")
+        new_digest = bytes.fromhex(digest_hex)
 
     new_aux = find_and_patch(aux, desc_off, desc_size, part, new_digest, zero_fec, footer_info)
 
@@ -205,11 +289,14 @@ def main(argv):
     open(out, "wb").write(blob)
     extra = []
     if footer_info:
-        extra.append(f"image_size={footer_info['image_size']} tree_size={footer_info['tree_size']}")
+        detail = f"image_size={footer_info['image_size']}"
+        if "tree_size" in footer_info:
+            detail += f" tree_size={footer_info['tree_size']}"
+        extra.append(detail)
     if zero_fec:
         extra.append("fec zeroed")
     suffix = f" ({', '.join(extra)})" if extra else ""
-    print(f"wrote {out}: {len(blob)} bytes, {part} root_digest -> {digest_hex}{suffix}")
+    print(f"wrote {out}: {len(blob)} bytes, {part} digest -> {digest_hex}{suffix}")
     return 0
 
 

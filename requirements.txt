@@ -1,6 +1,6 @@
-# Runtime dependencies for the vendored edl tool (vendor/edlclient).
+# Runtime dependencies for the vendored edl tool (tooling/vendor/edlclient).
 # edlclient itself is NOT listed here - it is vendored (patched) in this repo.
-# Install with: scripts/setup.sh   (or: pip install -r requirements.txt)
+# Install with: tooling/scripts/setup.sh   (or: pip install -r requirements.txt)
 #
 # Versions below are the ones this repo was verified against on Python 3.14
 # (macOS, Apple Silicon). Loosen the pins if you need a different platform.

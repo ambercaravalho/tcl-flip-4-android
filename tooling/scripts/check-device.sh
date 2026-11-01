@@ -5,11 +5,11 @@
 # device, so we ask pyusb/libusb directly, which is reliable.
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PY="$DIR/.venv/bin/python"
 
 if [[ ! -x "$PY" ]]; then
-  echo "error: $PY not found. Run scripts/setup.sh first." >&2
+  echo "error: $PY not found. Run tooling/scripts/setup.sh first." >&2
   exit 1
 fi
 

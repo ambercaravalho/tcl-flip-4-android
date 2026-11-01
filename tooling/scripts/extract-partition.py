@@ -6,11 +6,11 @@ copies one partition to a file, so you can inspect/patch boot, vbmeta, etc.
 without re-reading the phone.
 
 Usage:
-    scripts/extract-partition.py <image> <partition-name> <output>
-    scripts/extract-partition.py <image> --list
+    tooling/scripts/extract-partition.py <image> <partition-name> <output>
+    tooling/scripts/extract-partition.py <image> --list
 
 Example:
-    scripts/extract-partition.py backups/flip4-full-emmc.img vbmeta_b build/vbmeta_b.img
+    tooling/scripts/extract-partition.py artifacts/backups/flip4-full-emmc.img vbmeta_b artifacts/build/vbmeta_b.img
 """
 import os
 import struct

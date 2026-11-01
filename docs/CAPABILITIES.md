@@ -2,19 +2,19 @@
 
 > **Experimental / brick risk.** Unofficial notes for one specific phone. The
 > WRITE and erase commands here can **permanently brick** your device. Do your
-> own research and **make a full verified backup first** (`scripts/backup.sh`).
+> own research and **make a full verified backup first** (`tooling/scripts/backup.sh`).
 > Use at your own risk. See the [README](../README.md).
 
 This is the full capability reference for the TCL Flip 4's firehose loader
-(`loader/flip-4-edl.bin`), mapped to concrete `edl` commands.
+(`tooling/loader/flip-4-edl.bin`), mapped to concrete `edl` commands.
 
 For an overview and setup, see the [README](../README.md). For why the tool is
 patched and why `--skipresponse` is required, see [PATCHES.md](PATCHES.md).
 
 ## How to read this doc
 
-- Every command goes through the wrapper: **`scripts/edl <command> ...`**.
-- Common flags on this device: `--loader=loader/flip-4-edl.bin --memory=emmc`.
+- Every command goes through the wrapper: **`tooling/scripts/edl <command> ...`**.
+- Common flags on this device: `--loader=tooling/loader/flip-4-edl.bin --memory=emmc`.
 - **`--skipresponse` rule (important):** add it to **READ** commands; **omit it
   on WRITE/erase** commands, or the write reports success but silently does not
   commit. Why: [PATCHES.md](PATCHES.md).
@@ -25,7 +25,7 @@ patched and why `--skipresponse` is required, see [PATCHES.md](PATCHES.md).
   - **ADVANCED** - low-level memory/fuse access; may be blocked by secure boot.
 
 > Before running ANY WRITE/erase command, make a verified full backup
-> (`scripts/backup.sh`) and copy it somewhere safe.
+> (`tooling/scripts/backup.sh`) and copy it somewhere safe.
 
 ## What this loader advertises
 
@@ -89,13 +89,13 @@ Loader build date: May 14 2025
 ### Secure-boot status (READ)
 
 ```bash
-scripts/edl secureboot --loader=loader/flip-4-edl.bin
+tooling/scripts/edl secureboot --loader=tooling/loader/flip-4-edl.bin
 ```
 
 ### Storage / flash info (READ)
 
 ```bash
-scripts/edl getstorageinfo --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
+tooling/scripts/edl getstorageinfo --loader=tooling/loader/flip-4-edl.bin --memory=emmc --skipresponse
 ```
 
 ### Partition table (READ)
@@ -103,50 +103,50 @@ scripts/edl getstorageinfo --loader=loader/flip-4-edl.bin --memory=emmc --skipre
 Print it:
 
 ```bash
-scripts/edl printgpt --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
+tooling/scripts/edl printgpt --loader=tooling/loader/flip-4-edl.bin --memory=emmc --skipresponse
 ```
 
 Dump the GPT (and a `rawprogram` xml you can reuse for flashing) to a folder:
 
 ```bash
-scripts/edl gpt backups/gpt --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
+tooling/scripts/edl gpt artifacts/backups/gpt --loader=tooling/loader/flip-4-edl.bin --memory=emmc --skipresponse
 ```
 
 ### Backups / reads (READ)
 
-Full raw eMMC image (recommended; also see `scripts/backup.sh`):
+Full raw eMMC image (recommended; also see `tooling/scripts/backup.sh`):
 
 ```bash
-scripts/edl rf backups/flip4-full-emmc.img \
-    --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
+tooling/scripts/edl rf artifacts/backups/flip4-full-emmc.img \
+    --loader=tooling/loader/flip-4-edl.bin --memory=emmc --skipresponse
 ```
 
 Every partition to its own file:
 
 ```bash
-scripts/edl rl backups/partitions \
-    --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
+tooling/scripts/edl rl artifacts/backups/partitions \
+    --loader=tooling/loader/flip-4-edl.bin --memory=emmc --skipresponse
 ```
 
 A single partition (note A/B suffixes, e.g. `boot_a`, `modem_a`):
 
 ```bash
-scripts/edl r boot_a backups/boot_a.img \
-    --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
+tooling/scripts/edl r boot_a artifacts/backups/boot_a.img \
+    --loader=tooling/loader/flip-4-edl.bin --memory=emmc --skipresponse
 ```
 
 Raw sectors (start sector, count, file):
 
 ```bash
-scripts/edl rs 0 34 backups/first34.img \
-    --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
+tooling/scripts/edl rs 0 34 artifacts/backups/first34.img \
+    --loader=tooling/loader/flip-4-edl.bin --memory=emmc --skipresponse
 ```
 
 ### A/B slot (READ / CONTROL)
 
 ```bash
-scripts/edl getactiveslot --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
-scripts/edl setactiveslot a --loader=loader/flip-4-edl.bin --memory=emmc --skipresponse
+tooling/scripts/edl getactiveslot --loader=tooling/loader/flip-4-edl.bin --memory=emmc --skipresponse
+tooling/scripts/edl setactiveslot a --loader=tooling/loader/flip-4-edl.bin --memory=emmc --skipresponse
 ```
 
 ### Flashing / restore (WRITE - can brick)
@@ -162,35 +162,35 @@ scripts/edl setactiveslot a --loader=loader/flip-4-edl.bin --memory=emmc --skipr
 Restore one partition:
 
 ```bash
-scripts/edl w boot_a backups/boot_a.img \
-    --loader=loader/flip-4-edl.bin --memory=emmc
+tooling/scripts/edl w boot_a artifacts/backups/boot_a.img \
+    --loader=tooling/loader/flip-4-edl.bin --memory=emmc
 ```
 
 Flash a full raw image back:
 
 ```bash
-scripts/edl wf backups/flip4-full-emmc.img \
-    --loader=loader/flip-4-edl.bin --memory=emmc
+tooling/scripts/edl wf artifacts/backups/flip4-full-emmc.img \
+    --loader=tooling/loader/flip-4-edl.bin --memory=emmc
 ```
 
 Flash a set of images using a `rawprogram*.xml` (as produced by `gpt`/`rl`):
 
 ```bash
-scripts/edl wl backups/partitions \
-    --loader=loader/flip-4-edl.bin --memory=emmc
+tooling/scripts/edl wl artifacts/backups/partitions \
+    --loader=tooling/loader/flip-4-edl.bin --memory=emmc
 ```
 
 ### Erase (WRITE - can brick)
 
 ```bash
-scripts/edl e misc      --loader=loader/flip-4-edl.bin --memory=emmc
-scripts/edl es 0 34     --loader=loader/flip-4-edl.bin --memory=emmc
+tooling/scripts/edl e misc      --loader=tooling/loader/flip-4-edl.bin --memory=emmc
+tooling/scripts/edl es 0 34     --loader=tooling/loader/flip-4-edl.bin --memory=emmc
 ```
 
 ### Reboot / power (CONTROL)
 
 ```bash
-scripts/edl reset --loader=loader/flip-4-edl.bin
+tooling/scripts/edl reset --loader=tooling/loader/flip-4-edl.bin
 ```
 
 Caveat: on this loader the software reset is unreliable (it needs the read
@@ -202,9 +202,9 @@ mode is to **pull the battery for ~10 seconds and power on**.
 These read SoC memory/fuses directly and may be limited by secure boot:
 
 ```bash
-scripts/edl peek 0x100000 0x100 backups/mem.bin --loader=loader/flip-4-edl.bin
-scripts/edl pbl backups/pbl.bin  --loader=loader/flip-4-edl.bin
-scripts/edl qfp backups/qfprom.bin --loader=loader/flip-4-edl.bin
+tooling/scripts/edl peek 0x100000 0x100 artifacts/backups/mem.bin --loader=tooling/loader/flip-4-edl.bin
+tooling/scripts/edl pbl artifacts/backups/pbl.bin  --loader=tooling/loader/flip-4-edl.bin
+tooling/scripts/edl qfp artifacts/backups/qfprom.bin --loader=tooling/loader/flip-4-edl.bin
 ```
 
 ---

@@ -11,18 +11,18 @@ Supports two workflows for the TCL Flip 4 5G (T440W):
        leaving stock `system` sectors 12288..1253208 completely untouched for instant rollback!
      - OR 2 contiguous extents (12288..1253208 + 2568192..) if system_b is up to 2,541,662,208 B (~2.37 GiB).
    Writes a 524,288-byte `super_meta.img` (to flash at super start LBA 3686400)
-   and prints the exact `scripts/edl ws` commands for Phase 2.
+   and prints the exact `tooling/scripts/edl ws` commands for Phase 2.
 
 2. Full Super Image Mode (`--full`):
    Packs a complete 3,221,225,472-byte (3,072 MiB) `super.img` with contiguous
    linear extents for all Slot B partitions.
 
 Usage:
-    scripts/lp_make.py --surgical --system <system_b_signed.img> --out-dir <dir>
-        [--stock-meta build/super_meta_live.img]
+    tooling/scripts/lp_make.py --surgical --system <system_b_signed.img> --out-dir <dir>
+        [--stock-meta artifacts/build/super_meta_live.img]
         [--product-size BYTES] [--system-ext-size BYTES] [--odm-size BYTES]
 
-    scripts/lp_make.py --full --out <super-android.img>
+    tooling/scripts/lp_make.py --full --out <super-android.img>
         --odm <odm_b.img> --product <product_b.img> --system <system_b.img>
         --system-dlkm <system_dlkm_b.img> --system-ext <system_ext_b.img>
         --vendor <vendor_b.img> --vendor-dlkm <vendor_dlkm_b.img>
@@ -278,8 +278,8 @@ def build_surgical_slot_b(args):
         s_start = sys_extents[0][2]
         emmc_lba = SUPER_START_LBA + s_start
         print(f"  Flash commands (Phase 2 over EDL, NO --skipresponse on writes):")
-        print(f"    scripts/edl ws {SUPER_START_LBA} {out_meta} --loader=loader/flip-4-edl.bin --memory=emmc")
-        print(f"    scripts/edl ws {emmc_lba} {args.system} --loader=loader/flip-4-edl.bin --memory=emmc")
+        print(f"    tooling/scripts/edl ws {SUPER_START_LBA} {out_meta} --loader=tooling/loader/flip-4-edl.bin --memory=emmc")
+        print(f"    tooling/scripts/edl ws {emmc_lba} {args.system} --loader=tooling/loader/flip-4-edl.bin --memory=emmc")
     else:
         chunk0 = os.path.join(args.out_dir, "system_b_extent0.img")
         chunk1 = os.path.join(args.out_dir, "system_b_extent1.img")
@@ -296,9 +296,9 @@ def build_surgical_slot_b(args):
         print(f"    {chunk0} ({b0} bytes -> eMMC LBA {lba0})")
         print(f"    {chunk1} ({sys_size - b0} bytes -> eMMC LBA {lba1})")
         print(f"  Flash commands (Phase 2 over EDL, NO --skipresponse on writes):")
-        print(f"    scripts/edl ws {SUPER_START_LBA} {out_meta} --loader=loader/flip-4-edl.bin --memory=emmc")
-        print(f"    scripts/edl ws {lba0} {chunk0} --loader=loader/flip-4-edl.bin --memory=emmc")
-        print(f"    scripts/edl ws {lba1} {chunk1} --loader=loader/flip-4-edl.bin --memory=emmc")
+        print(f"    tooling/scripts/edl ws {SUPER_START_LBA} {out_meta} --loader=tooling/loader/flip-4-edl.bin --memory=emmc")
+        print(f"    tooling/scripts/edl ws {lba0} {chunk0} --loader=tooling/loader/flip-4-edl.bin --memory=emmc")
+        print(f"    tooling/scripts/edl ws {lba1} {chunk1} --loader=tooling/loader/flip-4-edl.bin --memory=emmc")
 
 
 def align_up(val, align):
@@ -375,8 +375,8 @@ def main():
     mode.add_argument("--full", action="store_true", help="Build full 3 GiB super.img")
 
     ap.add_argument("--system", required=True, help="Path to signed system_b.img")
-    ap.add_argument("--out-dir", default="build/android-flash", help="Output dir for --surgical mode")
-    ap.add_argument("--stock-meta", default="build/super_meta_live.img", help="Stock super_meta_live.img")
+    ap.add_argument("--out-dir", default="artifacts/build/android-flash", help="Output dir for --surgical mode")
+    ap.add_argument("--stock-meta", default="artifacts/build/super_meta_live.img", help="Stock super_meta_live.img")
     ap.add_argument("--odm-size", type=int, default=0, help="Override odm_b size in bytes")
     ap.add_argument("--product-size", type=int, default=0, help="Override product_b size in bytes")
     ap.add_argument("--system-ext-size", type=int, default=0, help="Override system_ext_b size in bytes")
@@ -387,12 +387,12 @@ def main():
     )
 
     ap.add_argument("--out", help="Output super.img path for --full mode")
-    ap.add_argument("--odm", default="build/odm_b-dbg-patched.img")
-    ap.add_argument("--product", default="build/product_b.img")
-    ap.add_argument("--system-dlkm", default="build/system_dlkm_b.img")
-    ap.add_argument("--system-ext", default="build/system_ext_b.img")
-    ap.add_argument("--vendor", default="build/vendor_b.img")
-    ap.add_argument("--vendor-dlkm", default="build/vendor_dlkm_b.img")
+    ap.add_argument("--odm", default="artifacts/build/odm_b-dbg-patched.img")
+    ap.add_argument("--product", default="artifacts/build/product_b.img")
+    ap.add_argument("--system-dlkm", default="artifacts/build/system_dlkm_b.img")
+    ap.add_argument("--system-ext", default="artifacts/build/system_ext_b.img")
+    ap.add_argument("--vendor", default="artifacts/build/vendor_b.img")
+    ap.add_argument("--vendor-dlkm", default="artifacts/build/vendor_dlkm_b.img")
 
     args = ap.parse_args()
     if args.surgical:

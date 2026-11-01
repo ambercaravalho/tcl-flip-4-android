@@ -2,12 +2,12 @@
 # One-time setup: create the local .venv and install the runtime deps for the
 # vendored edl tool. Safe to re-run.
 #
-# Usage: scripts/setup.sh [python-interpreter]
-#   e.g. scripts/setup.sh            (uses `python3` from PATH)
-#        scripts/setup.sh python3.12 (use a specific interpreter)
+# Usage: tooling/scripts/setup.sh [python-interpreter]
+#   e.g. tooling/scripts/setup.sh            (uses `python3` from PATH)
+#        tooling/scripts/setup.sh python3.12 (use a specific interpreter)
 set -euo pipefail
 
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$DIR"
 
 PYTHON_BIN="${1:-python3}"
@@ -27,7 +27,7 @@ echo ">> Installing runtime dependencies (requirements.txt)"
 .venv/bin/python -m pip install -r requirements.txt
 
 echo ">> Verifying the vendored edl tool loads"
-PYTHONPATH="$DIR/vendor" .venv/bin/python -m edlclient.edl --help >/dev/null
+PYTHONPATH="$DIR/tooling/vendor" .venv/bin/python -m edlclient.edl --help >/dev/null
 
 cat <<'EOF'
 
@@ -35,8 +35,8 @@ Setup complete.
 
 Next steps:
   1. Put the phone in EDL mode and connect USB (see README).
-  2. scripts/check-device.sh        # confirm the 9008 device is visible
-  3. scripts/backup.sh              # make a full backup
+  2. tooling/scripts/check-device.sh        # confirm the 9008 device is visible
+  3. tooling/scripts/backup.sh              # make a full backup
 
-On Linux, you may also need the udev rules in linux/ (see README).
+On Linux, you may also need the udev rules in tooling/linux/ (see README).
 EOF

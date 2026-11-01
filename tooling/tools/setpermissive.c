@@ -6,7 +6,7 @@
  *
  * Build (Linux; requires static libsepol.a - `libsepol-dev` on Debian/Ubuntu,
  * `libsepol` on Arch):
- *   cc -O2 -o setpermissive tools/setpermissive.c -l:libsepol.a
+ *   cc -O2 -o setpermissive tooling/tools/setpermissive.c -l:libsepol.a
  * (Note: `-l:libsepol.a` is required because `policydb_*` / `ebitmap_*` are
  * internal symbols not exported by the shared `libsepol.so`.)
  * Usage: ./setpermissive <in_policy> <out_policy>

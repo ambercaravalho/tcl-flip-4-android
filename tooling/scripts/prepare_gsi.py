@@ -5,8 +5,9 @@ metadata generation for the TCL Flip 4 5G (T440W).
 Given an Android 14 `a64` (`arm32_binder64`) GSI image (`.img`, `.img.xz`, or
 `.img.gz`, sparse or raw ext4), this script:
   1. Decompresses and unsparses the image to `<out-dir>/system_b_android.img`.
-  2. Verifies the ext4 filesystem and confirms `/system/bin/init` is 32-bit ARM
-     (`ELF 32-bit LSB ... ARM`, required by `init_boot` and 32-bit vendor HALs).
+  2. Rejects non-SDK-34 inputs, records the GSI's actual fingerprint and hash,
+     and confirms `/system/bin/init` is 32-bit ARM (`ELF 32-bit LSB ... ARM`,
+     required by `init_boot` and 32-bit vendor HALs).
   3. Patches `/system/usr/keylayout/Generic.kl` in-place (preserving exact byte
      size so ext4 inode/block checksums stay untouched) to map the TCL Flip 4 5G
      physical keypad scancodes (`352 -> DPAD_CENTER`, `48 -> DEL`,
@@ -20,20 +21,24 @@ Given an Android 14 `a64` (`arm32_binder64`) GSI image (`.img`, `.img.xz`, or
        - `/etc/selinux/precompiled_sepolicy.*.sha256` matching the GSI
        - `/etc/selinux/odm_sepolicy.cil` (fallback CIL bridge for `secilc`)
        - `/usr/keylayout/{soc_matrix_keypad0,gpio-keys,pm8941_pwrkey,pm8941_resin}.kl`
-       - `/etc/build.prop` (`ro.debuggable=1`, `ro.adb.secure=0`, `persist.sys.usb.config=adb`)
+       - optional USB-only diagnostics (`ro.debuggable`, ADB properties, and
+         the legacy ConfigFS fallback);
+       - a separately selected, opt-in display diagnostic profile.
   5. Rebuilds the AVB hashtree footers on `odm_b_android.img` and
      `system_b_android.img` (`--do_not_generate_fec`) and surgically re-signs:
        - `<out-dir>/vbmeta_b_android.img` (`testkey_rsa4096.pem`)
        - `<out-dir>/vbmeta_system_b_android.img` (`testkey_rsa2048.pem`)
-  6. Generates `<out-dir>/super_meta_android.img` via `scripts/lp_make.py --surgical`
+  6. Generates `<out-dir>/super_meta_android.img` via `tooling/scripts/lp_make.py --surgical`
      (mapping `product_b` and `system_ext_b` as zero-length so `first_stage_init`
      uses the GSI's internal `/system/product` and `/system/system_ext`).
 
 Usage:
-    scripts/prepare_gsi.py <gsi.img[.xz|.gz]> [--out-dir build/android-flash]
+    tooling/scripts/prepare_gsi.py <gsi.img[.xz|.gz]> [--out-dir artifacts/build/android-flash]
 """
 import argparse
 import gzip
+import hashlib
+import json
 import lzma
 import os
 import re
@@ -43,8 +48,8 @@ import subprocess
 import sys
 import tempfile
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(REPO_ROOT, "tooling", "scripts"))
 from inspect_ext4 import Ext4Reader, EXT4_EXTENTS_FL
 
 SPARSE_HEADER_MAGIC = 0xED26FF3A
@@ -52,6 +57,37 @@ CHUNK_TYPE_RAW = 0xCAC1
 CHUNK_TYPE_FILL = 0xCAC2
 CHUNK_TYPE_DONT_CARE = 0xCAC3
 CHUNK_TYPE_CRC32 = 0xCAC4
+
+DISPLAY_PROFILES = {
+    "none": (),
+    # Reproducibility profiles for already-disproven experiments. These are
+    # deliberately opt-in and never part of the default USB debug profile.
+    "wait-fences": (
+        "debug.sf.latch_unsignaled=0",
+        "debug.sf.auto_latch_unsignaled=0",
+    ),
+    "spec-fence-off": ("vendor.display.enable_spec_fence=0",),
+}
+
+
+def parse_android_properties(raw_bytes):
+    """Parse Android property-file bytes into a last-definition-wins mapping."""
+    props = {}
+    for raw_line in raw_bytes.decode("utf-8", errors="replace").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        props[key.strip()] = value.strip()
+    return props
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as source:
+        while chunk := source.read(4 * 1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def extract_or_copy(src_path, raw_tmp_path):
@@ -157,16 +193,27 @@ def overwrite_ext4_file_same_size(img_path, file_path_in_img, new_bytes):
                 f"got {len(new_bytes)} B, expected {inode['size']} B"
             )
         bs = reader.block_size
-        pos = 0
+        covered_until = 0
         for ee_block, ee_len, pblock, uninit in exts:
             if uninit:
                 raise SystemExit(f"error: {file_path_in_img} has uninitialized extent")
-            chunk_len = min(ee_len * bs, len(new_bytes) - pos)
-            fh.seek(pblock * bs)
-            fh.write(new_bytes[pos:pos + chunk_len])
-            pos += chunk_len
-            if pos >= len(new_bytes):
+            logical_offset = ee_block * bs
+            if any(new_bytes[covered_until:logical_offset]):
+                raise SystemExit(
+                    f"error: non-zero data for sparse hole in {file_path_in_img}"
+                )
+            chunk_len = min(ee_len * bs, len(new_bytes) - logical_offset)
+            if chunk_len <= 0:
                 break
+            fh.seek(pblock * bs)
+            fh.write(new_bytes[logical_offset:logical_offset + chunk_len])
+            covered_until = logical_offset + chunk_len
+            if covered_until >= len(new_bytes):
+                break
+        if any(new_bytes[covered_until:]):
+            raise SystemExit(
+                f"error: file extents do not cover non-zero tail of {file_path_in_img}"
+            )
 
 
 def patch_generic_kl_for_t440w(raw_kl_bytes):
@@ -206,6 +253,76 @@ def calc_partition_size_for_avb(raw_img_size):
     return ((needed + align - 1) // align) * align
 
 
+def verify_vbmeta_signature(image_path, key_path):
+    """Verify a standalone vbmeta signature and its embedded AVB public key.
+
+    ``avbtool verify_image`` also verifies every referenced partition. This
+    pipeline intentionally does not materialize unchanged stock partitions, so
+    perform the cryptographic checks without ignoring descriptor failures.
+    """
+    data = open(image_path, "rb").read()
+    if len(data) < 256 or data[:4] != b"AVB0":
+        raise RuntimeError(f"{image_path}: not a standalone vbmeta image")
+
+    auth_size = struct.unpack_from(">Q", data, 12)[0]
+    aux_size = struct.unpack_from(">Q", data, 20)[0]
+    hash_off, hash_size = struct.unpack_from(">QQ", data, 32)
+    sig_off, sig_size = struct.unpack_from(">QQ", data, 48)
+    key_off, key_size = struct.unpack_from(">QQ", data, 64)
+    blob_size = 256 + auth_size + aux_size
+    if blob_size > len(data):
+        raise RuntimeError(f"{image_path}: truncated vbmeta blob")
+
+    header = data[:256]
+    auth = data[256:256 + auth_size]
+    aux = data[256 + auth_size:blob_size]
+    signed_input = header + aux
+    if auth[hash_off:hash_off + hash_size] != hashlib.sha256(signed_input).digest():
+        raise RuntimeError(f"{image_path}: vbmeta authentication hash mismatch")
+
+    signature = auth[sig_off:sig_off + sig_size]
+    embedded_key = aux[key_off:key_off + key_size]
+    with tempfile.TemporaryDirectory(prefix="t440w-avb-verify-") as tmp:
+        expected_key = os.path.join(tmp, "expected.avbpubkey")
+        public_pem = os.path.join(tmp, "public.pem")
+        signature_path = os.path.join(tmp, "signature.bin")
+        signed_input_path = os.path.join(tmp, "signed-input.bin")
+
+        subprocess.run(
+            [
+                sys.executable,
+                "tooling/tools/avb/avbtool.py",
+                "extract_public_key",
+                "--key", key_path,
+                "--output", expected_key,
+            ],
+            check=True,
+        )
+        if embedded_key != open(expected_key, "rb").read():
+            raise RuntimeError(
+                f"{image_path}: embedded AVB key does not match {key_path}"
+            )
+
+        with open(public_pem, "wb") as out:
+            subprocess.run(
+                ["openssl", "pkey", "-in", key_path, "-pubout"],
+                stdout=out,
+                check=True,
+            )
+        open(signature_path, "wb").write(signature)
+        open(signed_input_path, "wb").write(signed_input)
+        subprocess.run(
+            [
+                "openssl", "dgst", "-sha256",
+                "-verify", public_pem,
+                "-signature", signature_path,
+                signed_input_path,
+            ],
+            check=True,
+        )
+    print(f"   verified signature and embedded key: {image_path}")
+
+
 def build_odm_android_image(
     gsi_img,
     vendor_img,
@@ -214,9 +331,11 @@ def build_odm_android_image(
     plat_sha,
     sysext_sha,
     prod_sha,
+    usb_diagnostics,
+    display_profile,
 ):
     """Build odm_b_android.img with merged permissive SELinux policy, GSI sha256s,
-    Android keypad .kl files, and debuggable build.prop."""
+    Android keypad .kl files, and bring-up debugging configuration."""
     with tempfile.TemporaryDirectory(prefix="t440w-odm-") as work:
         def dump_opt(img, src, dst):
             with open(img, "rb") as fh:
@@ -302,12 +421,16 @@ def build_odm_android_image(
         with open(f"{work}/odm.img", "rb") as fh:
             r = Ext4Reader(fh)
             bp = r.read_inode_data(r.resolve_path("/etc/build.prop")).decode("utf-8")
-        extra_props = [
-            "ro.debuggable=1",
-            "ro.adb.secure=0",
-            "persist.sys.usb.config=adb",
-            "service.adb.root=1",
-        ]
+        extra_props = []
+        if usb_diagnostics:
+            extra_props.extend([
+                "ro.debuggable=1",
+                "ro.adb.secure=0",
+                "persist.sys.usb.config=adb",
+                "persist.vendor.usb.config=adb",
+                "service.adb.root=1",
+            ])
+        extra_props.extend(DISPLAY_PROFILES[display_profile])
         for ep in extra_props:
             key = ep.split("=", 1)[0]
             if f"{key}=" not in bp:
@@ -320,6 +443,11 @@ def build_odm_android_image(
         kl_names = ["soc_matrix_keypad0.kl", "gpio-keys.kl", "pm8941_pwrkey.kl", "pm8941_resin.kl"]
         for kn in kl_names:
             shutil.copyfile(os.path.join(kl_dir, kn), f"{work}/{kn}")
+        if usb_diagnostics:
+            shutil.copyfile(
+                os.path.join(REPO_ROOT, "device", "t440w", "init", "init.t440w.debug.rc"),
+                f"{work}/init.t440w.debug.rc",
+            )
 
         # Build debugfs script to update odm.img (expanded to 348 blocks = 1,425,408 B,
         # which fits comfortably inside the 1,470,464 B odm partition with AVB footer)
@@ -361,6 +489,19 @@ def build_odm_android_image(
             "sif /usr/keylayout gid 0",
             "ea_set -f /work/ctx.kl.bin /usr/keylayout security.selinux",
         ]
+        if usb_diagnostics:
+            dbg_cmds.extend([
+                "mkdir /etc/init",
+                "sif /etc/init mode 040755",
+                "sif /etc/init uid 0",
+                "sif /etc/init gid 0",
+                "ea_set -f /work/ctx.vf.bin /etc/init security.selinux",
+                "write /work/init.t440w.debug.rc /etc/init/init.t440w.debug.rc",
+                "sif /etc/init/init.t440w.debug.rc mode 0100644",
+                "sif /etc/init/init.t440w.debug.rc uid 0",
+                "sif /etc/init/init.t440w.debug.rc gid 0",
+                "ea_set -f /work/ctx.bp.bin /etc/init/init.t440w.debug.rc security.selinux",
+            ])
         if sysext_sha:
             dbg_cmds.extend([
                 "write /work/sysext.sha256 /etc/selinux/precompiled_sepolicy.system_ext_sepolicy_and_mapping.sha256",
@@ -419,11 +560,23 @@ def build_odm_android_image(
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("gsi", help="Path to GSI image (.img, .img.xz, or .img.gz)")
-    ap.add_argument("--out-dir", default="build/android-flash", help="Output directory")
-    ap.add_argument("--stock-odm-dbg", default="build/odm_b-dbg-patched.img", help="Base permissive odm_b image")
-    ap.add_argument("--stock-vendor", default="build/vendor_b.img", help="Stock vendor_b.img")
-    ap.add_argument("--stock-vbmeta", default="build/vbmeta_b.img", help="Stock vbmeta_b.img")
-    ap.add_argument("--stock-vbmeta-system", default="build/vbmeta_system_b.img", help="Stock vbmeta_system_b.img")
+    ap.add_argument("--out-dir", default="artifacts/build/android-flash", help="Output directory")
+    ap.add_argument("--stock-odm-dbg", default="artifacts/build/odm_b-dbg-patched.img", help="Base permissive odm_b image")
+    ap.add_argument("--stock-vendor", default="artifacts/build/vendor_b.img", help="Stock vendor_b.img")
+    ap.add_argument("--stock-vbmeta", default="artifacts/build/vbmeta_b.img", help="Stock vbmeta_b.img")
+    ap.add_argument("--stock-vbmeta-system", default="artifacts/build/vbmeta_system_b.img", help="Stock vbmeta_system_b.img")
+    ap.add_argument(
+        "--usb-diagnostics",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Install forced-ADB/root diagnostics (default: enabled)",
+    )
+    ap.add_argument(
+        "--display-profile",
+        choices=sorted(DISPLAY_PROFILES),
+        default="none",
+        help="Opt-in display experiment; kept separate from USB diagnostics",
+    )
     args = ap.parse_args()
 
     # SECURITY-REVIEW: CLI tool creating output directory for user-specified output path
@@ -435,9 +588,48 @@ def main():
     unsparse_if_needed(sys_img)
     strip_existing_avb_footer(sys_img)
 
-    # 2. Inspect GSI ext4 image & verify architecture
+    # 2. Inspect GSI ext4 image & verify version, identity, and architecture
     with open(sys_img, "rb") as fh:
         reader = Ext4Reader(fh)
+        build_props = parse_android_properties(
+            reader.read_inode_data(reader.resolve_path("/system/build.prop"))
+        )
+        sdk = (
+            build_props.get("ro.system.build.version.sdk")
+            or build_props.get("ro.build.version.sdk")
+        )
+        fingerprint = (
+            build_props.get("ro.system.build.fingerprint")
+            or build_props.get("ro.build.fingerprint")
+        )
+        os_version = (
+            build_props.get("ro.system.build.version.release")
+            or build_props.get("ro.build.version.release")
+        )
+        security_patch = (
+            build_props.get("ro.system.build.version.security_patch")
+            or build_props.get("ro.build.version.security_patch")
+        )
+        if sdk != "34":
+            raise SystemExit(
+                f"error: GSI reports SDK {sdk or '<missing>'}, not SDK 34. "
+                "The stock T440W vendor boundary is Android 14 / SDK 34."
+            )
+        if not fingerprint:
+            raise SystemExit(
+                "error: GSI does not report ro.system.build.fingerprint or "
+                "ro.build.fingerprint"
+            )
+        if not os_version or not security_patch:
+            raise SystemExit(
+                "error: GSI is missing Android release or security-patch metadata"
+            )
+        print(">> Verified GSI identity:")
+        print(f"   SDK         : {sdk}")
+        print(f"   release     : {os_version}")
+        print(f"   fingerprint : {fingerprint}")
+        print(f"   patch level : {security_patch}")
+
         init_ino = reader.resolve_path("/system/bin/init")
         init_hdr = reader.read_inode_data(init_ino)[:20]
         if init_hdr[:4] != b"\x7fELF":
@@ -474,6 +666,29 @@ def main():
 
         generic_kl = reader.read_inode_data(reader.resolve_path("/system/usr/keylayout/Generic.kl"))
 
+    source_sha256 = sha256_file(args.gsi)
+    manifest = {
+        "device": "TCL Flip 4 5G (T440W)",
+        "input": {
+            "path": os.path.abspath(args.gsi),
+            "sha256": source_sha256,
+            "sdk": int(sdk),
+            "release": os_version,
+            "fingerprint": fingerprint,
+            "security_patch": security_patch,
+            "elf_class": ei_class,
+            "elf_machine": e_machine,
+        },
+        "diagnostics": {
+            "usb": args.usb_diagnostics,
+            "display_profile": args.display_profile,
+        },
+    }
+    with open(os.path.join(args.out_dir, "build-manifest.json"), "w") as output:
+        json.dump(manifest, output, indent=2, sort_keys=True)
+        output.write("\n")
+    print(f">> Recorded exact input identity (sha256={source_sha256})")
+
     # 3. Patch Generic.kl in-place for the TCL Flip 4 5G keypad
     patched_kl, counts = patch_generic_kl_for_t440w(generic_kl)
     overwrite_ext4_file_same_size(sys_img, "/system/usr/keylayout/Generic.kl", patched_kl)
@@ -489,6 +704,8 @@ def main():
         plat_sha,
         sysext_sha,
         prod_sha,
+        args.usb_diagnostics,
+        args.display_profile,
     )
 
     # Add AVB hashtree footer to odm_b_android.img and sign vbmeta_b_android.img
@@ -496,7 +713,7 @@ def main():
     subprocess.run(
         [
             sys.executable,
-            "tools/avb/avbtool.py",
+            "tooling/tools/avb/avbtool.py",
             "add_hashtree_footer",
             "--image", odm_out,
             "--partition_name", "odm",
@@ -514,11 +731,11 @@ def main():
     subprocess.run(
         [
             sys.executable,
-            "scripts/patch_vbmeta.py",
+            "tooling/scripts/patch_vbmeta.py",
             args.stock_vbmeta,
             "odm",
             "auto",
-            "tools/avb/testkeys/testkey_rsa4096.pem",
+            "tooling/tools/avb/testkeys/testkey_rsa4096.pem",
             vbmeta_out,
             "--zero-fec",
             f"--from-image={odm_out}",
@@ -533,7 +750,7 @@ def main():
     subprocess.run(
         [
             sys.executable,
-            "tools/avb/avbtool.py",
+            "tooling/tools/avb/avbtool.py",
             "add_hashtree_footer",
             "--image", sys_img,
             "--partition_name", "system",
@@ -542,9 +759,9 @@ def main():
             "--block_size", "4096",
             "--do_not_generate_fec",
             "--salt", "b1853b5bc80859b63e7708ed9f862b06ac7d76a06df0421e0544a370ee61b3d1",
-            "--prop", "com.android.build.system.os_version:14",
-            "--prop", "com.android.build.system.fingerprint:TCL/gflip5gtmo/gflip5gtmo:14/UKQ1.241125.001/jenkins12221705:user/test-keys",
-            "--prop", "com.android.build.system.security_patch:2024-11-05",
+            "--prop", f"com.android.build.system.os_version:{os_version}",
+            "--prop", f"com.android.build.system.fingerprint:{fingerprint}",
+            "--prop", f"com.android.build.system.security_patch:{security_patch}",
         ],
         check=True,
     )
@@ -552,11 +769,11 @@ def main():
     subprocess.run(
         [
             sys.executable,
-            "scripts/patch_vbmeta.py",
+            "tooling/scripts/patch_vbmeta.py",
             args.stock_vbmeta_system,
             "system",
             "auto",
-            "tools/avb/testkeys/testkey_rsa2048.pem",
+            "tooling/tools/avb/testkeys/testkey_rsa2048.pem",
             vbmeta_sys_out,
             "--zero-fec",
             f"--from-image={sys_img}",
@@ -565,33 +782,21 @@ def main():
     )
 
     # 6. Verify both vbmeta signatures with avbtool.py
-    print(">> Verifying AVB signatures with avbtool.py ...")
-    subprocess.run(
-        [
-            sys.executable,
-            "tools/avb/avbtool.py",
-            "verify_image",
-            "--image", vbmeta_out,
-            "--key", "tools/avb/testkeys/testkey_rsa4096.pem",
-        ],
-        check=False,
+    print(">> Verifying AVB signatures and embedded keys ...")
+    verify_vbmeta_signature(
+        vbmeta_out,
+        "tooling/tools/avb/testkeys/testkey_rsa4096.pem",
     )
-    subprocess.run(
-        [
-            sys.executable,
-            "tools/avb/avbtool.py",
-            "verify_image",
-            "--image", vbmeta_sys_out,
-            "--key", "tools/avb/testkeys/testkey_rsa2048.pem",
-        ],
-        check=False,
+    verify_vbmeta_signature(
+        vbmeta_sys_out,
+        "tooling/tools/avb/testkeys/testkey_rsa2048.pem",
     )
 
     # 7. Build surgical super metadata
     subprocess.run(
         [
             sys.executable,
-            "scripts/lp_make.py",
+            "tooling/scripts/lp_make.py",
             "--surgical",
             "--system", sys_img,
             "--out-dir", args.out_dir,

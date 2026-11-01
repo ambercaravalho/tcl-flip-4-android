@@ -1,34 +1,36 @@
-# Python virtualenv (recreate with: scripts/setup.sh)
+# Python virtualenv (recreate with: tooling/scripts/setup.sh)
 .venv/
 
 # Device backups / dumped images (huge, and contain personal data)
-backups/*
-!backups/.gitkeep
+artifacts/backups/*
+!artifacts/backups/.gitkeep
 *.img
 *.bin.dump
 
 # Run logs
-logs/*
-!logs/.gitkeep
+evidence/logs/*
+!evidence/logs/.gitkeep
 *.log
+evidence/captures/
 
 # edl runtime cache (auto-generated; contains device serial)
 edl_config.json
 
 # Partition / image work: carved/patched images + unpack trees (generated, can be huge)
-build/
+artifacts/build/
+artifacts/downloads/
 
 # Build / auxiliary tools: ignore compiled binaries and local scratch tools,
 # but keep our source tool and the vendored AOSP avbtool, test keys, and mkbootimg.
-tools/*
-!tools/setpermissive.c
-!tools/avb/
-tools/avb/*
-!tools/avb/avbtool.py
-!tools/avb/testkeys/
-!tools/avb/testkeys/*
-!tools/mkbootimg/
-!tools/mkbootimg/*.py
+tooling/tools/*
+!tooling/tools/setpermissive.c
+!tooling/tools/avb/
+tooling/tools/avb/*
+!tooling/tools/avb/avbtool.py
+!tooling/tools/avb/testkeys/
+!tooling/tools/avb/testkeys/*
+!tooling/tools/mkbootimg/
+!tooling/tools/mkbootimg/*.py
 
 # Python caches
 __pycache__/

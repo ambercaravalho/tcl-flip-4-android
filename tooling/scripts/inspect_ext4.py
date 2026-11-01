@@ -7,10 +7,10 @@ trees can be inspected or extracted in milliseconds on macOS/Linux without
 root mount permissions or debugfs.
 
 Usage:
-    scripts/inspect_ext4.py <ext4.img> ls [path]
-    scripts/inspect_ext4.py <ext4.img> find [subpath] [--pattern=GLOB]
-    scripts/inspect_ext4.py <ext4.py> cat <path>
-    scripts/inspect_ext4.py <ext4.img> dump <path_in_img> <host_output_path>
+    tooling/scripts/inspect_ext4.py <ext4.img> ls [path]
+    tooling/scripts/inspect_ext4.py <ext4.img> find [subpath] [--pattern=GLOB]
+    tooling/scripts/inspect_ext4.py <ext4.py> cat <path>
+    tooling/scripts/inspect_ext4.py <ext4.img> dump <path_in_img> <host_output_path>
 """
 import fnmatch
 import os

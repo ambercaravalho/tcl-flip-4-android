@@ -5,8 +5,8 @@ Parses the LP metadata in a super image and can list logical partitions or
 extract one to a file (by concatenating its linear extents). Pure stdlib.
 
 Usage:
-    scripts/lp_extract.py [--slot=N] <super.img> --list
-    scripts/lp_extract.py [--slot=N] <super.img> <partition> <output>
+    tooling/scripts/lp_extract.py [--slot=N] <super.img> --list
+    tooling/scripts/lp_extract.py [--slot=N] <super.img> <partition> <output>
 
 Reference: system/core/fs_mgr/liblp (LpMetadata* structs).
 """

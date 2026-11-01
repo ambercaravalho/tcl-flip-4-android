@@ -5,10 +5,10 @@ This repository bundles third-party components. Their licenses and origins are
 listed below.
 
 1. edl / edlclient (vendored, patched, slimmed)
-   Location: vendor/edlclient/
+   Location: tooling/vendor/edlclient/
    Upstream: https://github.com/bkerler/edl
    Author:   (c) B. Kerler
-   License:  GNU General Public License v3.0 (see vendor/edlclient/LICENSE)
+   License:  GNU General Public License v3.0 (see tooling/vendor/edlclient/LICENSE)
 
    This copy is edlclient 3.62 with local patches applied so it works with the
    TCL Flip 4 firehose loader, and slimmed to only the modules this workflow
@@ -18,7 +18,7 @@ listed below.
    with the terms of the GPLv3.
 
 2. flip-4-edl.bin (firehose programmer/loader)
-   Location: loader/flip-4-edl.bin
+   Location: tooling/loader/flip-4-edl.bin
    Origin:   Qualcomm/TCL signed firehose programmer for the TCL Flip 4 / "Go
              Flip 5G" (T440W). This is a proprietary, signed binary redistributed
              here for interoperability/backup purposes. All rights belong to the
@@ -37,19 +37,18 @@ Acknowledgements
    documented in docs/PATCHES.md.
 
 3. Linux udev rules
-   Location: linux/50-android.rules, linux/51-edl.rules
+   Location: tooling/linux/50-android.rules, tooling/linux/51-edl.rules
    Origin:   Community Android/EDL udev rules (as shipped with the original edl
              project). Provided for convenience on Linux hosts.
 
 4. AOSP avbtool and AVB test keys (vendored)
-   Location: tools/avb/avbtool.py, tools/avb/testkeys/
+   Location: tooling/tools/avb/avbtool.py, tooling/tools/avb/testkeys/
    Upstream: https://android.googlesource.com/platform/external/avb
    Author:   Copyright (C) 2016 The Android Open Source Project
-   License:  MIT / Apache License 2.0 (see header in tools/avb/avbtool.py)
+   License:  MIT / Apache License 2.0 (see header in tooling/tools/avb/avbtool.py)
 
-   Bundled directly so the AVB inspection and re-signing steps in
-   docs/PARTITIONS_AND_AVB.md work out of the box without a separate AOSP
-   checkout.
+   Bundled directly so the AVB inspection and re-signing runbooks under
+   docs/runbooks/ work out of the box without a separate AOSP checkout.
 
 Everything else in this repository (scripts, docs, and prior research from
 https://github.com/ambercaravalho/tcl-flip-4-root) is provided under the
