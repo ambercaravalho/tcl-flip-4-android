@@ -79,6 +79,53 @@ def read_footer_hashtree_desc(img_path, expected_part):
     raise SystemExit(f"error: hashtree descriptor '{expected_part}' not found in footer of {img_path}")
 
 
+def read_footer_hash_desc(img_path, expected_part):
+    """Extract a hash descriptor from an image's AVB footer."""
+    size = os.path.getsize(img_path)
+    with open(img_path, "rb") as fh:
+        fh.seek(size - AVB_FOOTER_SIZE)
+        footer = fh.read(AVB_FOOTER_SIZE)
+        if footer[0:4] != AVB_FOOTER_MAGIC:
+            return None
+        _, vbmeta_off, vbmeta_size = struct.unpack_from(">QQQ", footer, 12)
+        fh.seek(vbmeta_off)
+        vb = fh.read(vbmeta_size)
+
+    if vb[0:4] != b"AVB0":
+        raise SystemExit(f"error: bad AVB0 header at {vbmeta_off:#x} in {img_path}")
+    auth_size = struct.unpack_from(">Q", vb, 12)[0]
+    aux_size = struct.unpack_from(">Q", vb, 20)[0]
+    desc_off = struct.unpack_from(">Q", vb, 96)[0]
+    desc_size = struct.unpack_from(">Q", vb, 104)[0]
+    aux = vb[256 + auth_size:256 + auth_size + aux_size]
+
+    pos = desc_off
+    end = desc_off + desc_size
+    while pos < end:
+        tag, nbf = struct.unpack_from(">QQ", aux, pos)
+        body = pos + 16
+        if tag == DESC_HASH:
+            image_size = struct.unpack_from(">Q", aux, body)[0]
+            algorithm = bytes(aux[body + 8:body + 40]).split(b"\x00", 1)[0].decode()
+            name_len, salt_len, digest_len = struct.unpack_from(">LLL", aux, body + 40)
+            name_off = body + 116
+            name = aux[name_off:name_off + name_len].decode()
+            salt = aux[name_off + name_len:name_off + name_len + salt_len]
+            digest = aux[
+                name_off + name_len + salt_len:
+                name_off + name_len + salt_len + digest_len
+            ]
+            if name == expected_part:
+                return {
+                    "algorithm": algorithm,
+                    "image_size": image_size,
+                    "salt": salt,
+                    "digest": digest,
+                }
+        pos += 16 + nbf
+    raise SystemExit(f"error: hash descriptor '{expected_part}' not found in footer of {img_path}")
+
+
 def find_descriptor(aux, desc_off, desc_size, target):
     """Return (tag, descriptor fields) for a hash/hashtree partition."""
     pos = desc_off
@@ -240,15 +287,23 @@ def main(argv):
             footer_info = read_footer_hashtree_desc(from_image, part)
             auto_digest = footer_info["digest"]
         else:
-            algorithm = bytes(
-                aux[
-                    descriptor["body"] + 8:descriptor["body"] + 40
-                ]
-            ).split(b"\x00", 1)[0].decode()
-            image_size, auto_digest = calculate_hash_descriptor(
-                from_image, algorithm, descriptor["salt"]
-            )
-            footer_info = {"image_size": image_size}
+            footer_info = read_footer_hash_desc(from_image, part)
+            if footer_info is not None:
+                if footer_info["salt"] != descriptor["salt"]:
+                    raise SystemExit(
+                        f"error: {part} footer salt differs from vbmeta descriptor"
+                    )
+                auto_digest = footer_info["digest"]
+            else:
+                algorithm = bytes(
+                    aux[
+                        descriptor["body"] + 8:descriptor["body"] + 40
+                    ]
+                ).split(b"\x00", 1)[0].decode()
+                image_size, auto_digest = calculate_hash_descriptor(
+                    from_image, algorithm, descriptor["salt"]
+                )
+                footer_info = {"image_size": image_size}
         if digest_hex == "auto":
             new_digest = auto_digest
             digest_hex = new_digest.hex()

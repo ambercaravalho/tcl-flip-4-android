@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<exceptions>
+    <exception package="com.google.android.gms">
+        <!-- Signature spoofing is supplied by this GSI's restrictive framework
+             implementation; it does not expose FAKE_PACKAGE_SIGNATURE. -->
+        <permission name="android.permission.BODY_SENSORS" fixed="false"/>
+        <permission name="android.permission.GET_ACCOUNTS" fixed="false"/>
+        <permission name="android.permission.READ_CONTACTS" fixed="false"/>
+        <permission name="android.permission.WRITE_CONTACTS" fixed="false"/>
+        <permission name="android.permission.ACCESS_COARSE_LOCATION" fixed="false"/>
+        <permission name="android.permission.ACCESS_FINE_LOCATION" fixed="false"/>
+        <permission name="android.permission.ACCESS_BACKGROUND_LOCATION" fixed="false"/>
+        <permission name="android.permission.RECEIVE_SMS" fixed="false" whitelisted="true"/>
+        <permission name="android.permission.READ_PHONE_STATE" fixed="false"/>
+        <permission name="android.permission.READ_EXTERNAL_STORAGE" fixed="false"/>
+        <permission name="android.permission.WRITE_EXTERNAL_STORAGE" fixed="false"/>
+        <permission name="android.permission.CAMERA" fixed="false"/>
+        <permission name="android.permission.POST_NOTIFICATIONS" fixed="false"/>
+        <permission name="android.permission.SYSTEM_ALERT_WINDOW" fixed="false"/>
+    </exception>
+</exceptions>

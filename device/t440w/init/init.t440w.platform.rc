@@ -1,0 +1,24 @@
+# Required non-debug platform policy for the TCL Flip 4 5G.
+
+on post-fs-data
+    # TrebleDroid's vndk.rc copies this PHH setting over qemu.hw.mainkeys.
+    # Set both before zygote/system_server starts so no virtual nav bar exists.
+    setprop persist.sys.phh.mainkeys 1
+    setprop qemu.hw.mainkeys 1
+
+# The private SPI bridge requires one full-height, client-composed target.
+# Reapply the proven SurfaceFlinger control after every SurfaceFlinger start;
+# boot_completed is a fallback in case service registration outlives startup.
+service t440w_force_client_composition /odm/bin/t440w-force-client-composition.sh
+    class core
+    user root
+    group root
+    seclabel u:r:su:s0
+    disabled
+    oneshot
+
+on property:init.svc.surfaceflinger=running
+    start t440w_force_client_composition
+
+on property:sys.boot_completed=1
+    start t440w_force_client_composition

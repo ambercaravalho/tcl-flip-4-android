@@ -14,8 +14,11 @@ This repository records the effort to run Android 14 on the TCL Flip 4 5G
 
 Last recorded device state: Android 14 `treble_a64_bvN-userdebug` on slot B,
 locked/green, with the verified full-height-client SPI module and matching
-current-derived vbmeta retained. Root adbd and writable tracefs are available
-while `ro.debuggable` and `ro.force.debuggable` remain `0`.
+current-derived vbmeta retained. The accepted enforcing release profile uses
+authenticated non-root ADB; `ro.debuggable=0`, `ro.force_debuggable` is empty,
+`service.adb.root=0`, shell `su` is denied, and trace collection is disabled.
+Magisk 31.1 provides explicit per-application root from patched `init_boot_b`;
+Manager is installed normally under `/data/app`.
 
 The first equivalent GSI SPI trace is now captured. One D-pad event produced
 96 framebuffer submissions: 93 full-screen and three `31x14`, all `AB24` with
@@ -57,10 +60,16 @@ and Lineage Setup physical gates.
 
 The physical keypad profile is also persistent and Android setup is complete.
 Back, Home, and inert app-reserved softkeys are static keylayout mappings. A
-baked AccessibilityService supplies Messages and a toggleable D-pad cursor
-with click and conditional scrolling. The on-screen navigation bar is disabled
-through the early PHH mainkeys setting. The complete keypad, baked-app,
-navigation, reboot, and stable-display gates passed.
+baked versioned AccessibilityService supplies Messages and delegates cursor
+toggle to the accepted C9 service; C9 supplies movement, click, and conditional
+scrolling. The on-screen navigation bar is absent. The complete keypad,
+cursor, navigation, reboot, and stable-display gates passed.
+
+The rooted release stack also includes system microG Services and Companion,
+non-privileged system Aurora Store, and an image-carried Magisk Manager
+installer outside Android's package-scan directories. The final image set is
+byte-reproducible. Its AVB chain verifies but remains anchored in public AOSP
+test keys.
 
 Lineage testing used both free `super` regions and overwrote the old stock
 system sectors in Region A. A metadata-only rollback is no longer sufficient;
@@ -112,6 +121,7 @@ keylayouts, and early PHH mainkeys policy.
 - [`2026-11-01-07-spi-full-height-client.md`](findings/2026-11-01-07-spi-full-height-client.md)
 - [`2026-11-01-08-persistent-client-composition.md`](findings/2026-11-01-08-persistent-client-composition.md)
 - [`2026-11-01-09-physical-keypad-navigation.md`](findings/2026-11-01-09-physical-keypad-navigation.md)
+- [`2026-11-01-10-rooted-release-stack.md`](findings/2026-11-01-10-rooted-release-stack.md)
 
 Use [`findings/SESSION_TEMPLATE.md`](findings/SESSION_TEMPLATE.md) for the next
 session.
@@ -122,6 +132,7 @@ session.
 - [`reference/partitions-and-avb.md`](reference/partitions-and-avb.md)
 - [`reference/spi-display-path.md`](reference/spi-display-path.md)
 - [`reference/edl-loader.md`](reference/edl-loader.md)
+- [`reference/release-components.md`](reference/release-components.md)
 
 ## Runbooks
 

@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="service_description">Physical-keypad cursor and navigation for the TCL Flip 4 5G.</string>
+    <string name="service_description">Physical-keypad Messages and C9 cursor toggle for the TCL Flip 4 5G.</string>
 </resources>

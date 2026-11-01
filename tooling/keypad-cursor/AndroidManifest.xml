@@ -12,13 +12,13 @@
         android:allowBackup="false"
         android:debuggable="false"
         android:hasCode="true"
-        android:label="T440W Keypad Cursor"
+        android:label="T440W Key Actions"
         android:supportsRtl="false">
         <service
-            android:name=".KeypadCursorService"
+            android:name=".KeypadActionService"
             android:directBootAware="false"
             android:exported="true"
-            android:label="T440W Keypad Cursor"
+            android:label="T440W Key Actions"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

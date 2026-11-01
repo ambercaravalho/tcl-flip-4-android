@@ -63,6 +63,33 @@ Evidence:
 [`2026-10-31-03-first-android-flash.md`](../findings/2026-10-31-03-first-android-flash.md)
 and [`2026-10-31-04-display-experiments.md`](../findings/2026-10-31-04-display-experiments.md).
 
+## Accepted rooted release identities
+
+The completed slot-B release uses:
+
+- `init_boot_b`:
+  `2a660a1eaadfcab823f33fa86bb9ed09cbf099bbcaa902286e6093f02ef87efc`;
+- signed system:
+  `9a9616da3b136c7d8c3dbf788871237ee114f9cf8ca872de9f2c875d0f8dfa1a`;
+- system extents:
+  `ab110b2ffbe3677cd41b69ae55d9d164c6a0548f86d7187a9cccc8c6c1991b0e`
+  and
+  `0588e3523bfa663109ddb0be8c3ebe78e0a2d11a7f308085e939db8579a960f4`;
+- ODM:
+  `fc8039c407fdd41328d02e66c5b2a02e48bc857ea2adba3c274550b80178a437`;
+- super metadata:
+  `730246d306c90aa474eb75e0d346c2ee9eeec49726d9171dc70f51c5ef85eecf`;
+- `vbmeta_system_b`:
+  `852ce9b924b61171900a6acd88700c887b5bf73663f487a82a6afd50821171ea`;
+- `vbmeta_b`:
+  `734030bc9080e14037ec0ef76b00fa1b785828a43a3b95e32c13adad6ed9852b`.
+
+The chain verifies and boots locked/green, but both signing keys are public
+AOSP test keys. They do not provide a private production trust anchor.
+
+Evidence:
+[`2026-11-01-10-rooted-release-stack.md`](../findings/2026-11-01-10-rooted-release-stack.md).
+
 ## Operational constraints
 
 - Reads use `--skipresponse`.

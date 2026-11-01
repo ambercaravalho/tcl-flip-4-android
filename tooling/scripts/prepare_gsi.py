@@ -14,17 +14,20 @@ Given an Android 14 `a64` (`arm32_binder64`) GSI image (`.img`, `.img.xz`, or
      `30 -> ENVELOPE`, `138 -> CONTACTS`).
   4. Embeds the signed T440W keypad-cursor AccessibilityService, its idempotent
      boot enabler, and the early hardware-navigation policy.
-  5. Compiles a merged, 100% permissive SELinux policy (`precompiled_sepolicy`)
+  5. Compiles a merged SELinux policy (`precompiled_sepolicy`)
      combining the GSI's CIL policies (`plat` + `system_ext` + optional `product`),
      the TCL Flip 4 5G `vendor_b` CIL policies, and the KaiOS/QTI `_34_0`
-     compatibility bridge (`t440w_compat.cil`), then populates
+     compatibility bridge (`t440w_compat.cil`). Release builds keep it
+     enforcing; bring-up builds may explicitly request an all-permissive map.
+     The script then populates
      `<out-dir>/odm_b_android.img` with:
-       - `/etc/selinux/precompiled_sepolicy` (all GSI + vendor types permissive)
+       - `/etc/selinux/precompiled_sepolicy`
        - `/etc/selinux/precompiled_sepolicy.*.sha256` matching the GSI
        - `/etc/selinux/odm_sepolicy.cil` (fallback CIL bridge for `secilc`)
        - `/usr/keylayout/{soc_matrix_keypad0,gpio-keys,pm8941_pwrkey,pm8941_resin}.kl`
-       - optional USB-only diagnostics (`ro.debuggable`, ADB properties, and
-         the legacy ConfigFS fallback);
+       - required hardware-navigation and stable-display init hooks;
+       - optional authenticated USB diagnostics using the legacy ConfigFS
+         fallback, with a separately explicit unsafe root-adbd option;
        - a separately selected, opt-in display diagnostic profile.
   6. Rebuilds the AVB hashtree footers on `odm_b_android.img` and
      `system_b_android.img` (`--do_not_generate_fec`) and surgically re-signs:
@@ -256,67 +259,76 @@ def patch_generic_kl_for_t440w(raw_kl_bytes):
     return new_bytes, (n1, n2, n3, n4)
 
 
-def inject_keypad_system_files(system_img, keypad_apk):
-    """Add the signed keypad APK and its idempotent boot enabler to system."""
-    sources = {
-        "/system/app/T440WKeypadCursor/T440WKeypadCursor.apk": keypad_apk,
-        "/system/bin/t440w-enable-keypad.sh": os.path.join(
-            REPO_ROOT, "device", "t440w", "init", "t440w-enable-keypad.sh"
-        ),
-        "/system/etc/init/init.t440w.keypad.rc": os.path.join(
-            REPO_ROOT, "device", "t440w", "init", "init.t440w.keypad.rc"
-        ),
-    }
-    for target, source in sources.items():
-        if not os.path.isfile(source):
-            raise SystemExit(f"error: missing keypad source for {target}: {source}")
+def inject_ext4_files(image_path, sources, replace_paths=()):
+    """Inject exact host files into a system ext4 image.
 
-    with open(system_img, "rb") as image:
+    ``sources`` maps absolute in-image paths to ``(host_path, mode)`` pairs.
+    Existing files are rejected unless listed in ``replace_paths``.
+    """
+    replace_paths = set(replace_paths)
+    original_size = os.path.getsize(image_path)
+    existing_paths = set()
+    missing_dirs = set()
+    with open(image_path, "rb") as image:
         reader = Ext4Reader(image)
-        for target in sources:
+        for target, (source, _) in sources.items():
+            if not target.startswith("/"):
+                raise SystemExit(f"error: target path is not absolute: {target}")
+            if not os.path.isfile(source):
+                raise SystemExit(f"error: missing injection source for {target}: {source}")
             try:
                 reader.resolve_path(target)
+                existing_paths.add(target)
             except FileNotFoundError:
-                continue
-            raise SystemExit(f"error: refusing to replace existing system path: {target}")
+                pass
+            parent = os.path.dirname(target)
+            while parent not in ("", "/"):
+                try:
+                    reader.resolve_path(parent)
+                    break
+                except FileNotFoundError:
+                    missing_dirs.add(parent)
+                    parent = os.path.dirname(parent)
+    unexpected = existing_paths - replace_paths
+    if unexpected:
+        raise SystemExit(
+            "error: refusing to replace existing image paths: "
+            + ", ".join(sorted(unexpected))
+        )
 
-    original_size = os.path.getsize(system_img)
-    image_dir = os.path.dirname(os.path.abspath(system_img))
-    image_name = os.path.basename(system_img)
-    with tempfile.TemporaryDirectory(prefix="t440w-keypad-system-") as work:
-        shutil.copyfile(keypad_apk, os.path.join(work, "T440WKeypadCursor.apk"))
-        shutil.copyfile(
-            sources["/system/bin/t440w-enable-keypad.sh"],
-            os.path.join(work, "t440w-enable-keypad.sh"),
-        )
-        shutil.copyfile(
-            sources["/system/etc/init/init.t440w.keypad.rc"],
-            os.path.join(work, "init.t440w.keypad.rc"),
-        )
+    image_dir = os.path.dirname(os.path.abspath(image_path))
+    image_name = os.path.basename(image_path)
+    with tempfile.TemporaryDirectory(prefix="t440w-system-inject-") as work:
         with open(os.path.join(work, "ctx.system.bin"), "wb") as output:
             output.write(b"u:object_r:system_file:s0\x00")
-        commands = [
-            "mkdir /system/app/T440WKeypadCursor",
-            "sif /system/app/T440WKeypadCursor mode 040755",
-            "sif /system/app/T440WKeypadCursor uid 0",
-            "sif /system/app/T440WKeypadCursor gid 0",
-            "ea_set -f /work/ctx.system.bin /system/app/T440WKeypadCursor security.selinux",
-            "write /work/T440WKeypadCursor.apk /system/app/T440WKeypadCursor/T440WKeypadCursor.apk",
-            "sif /system/app/T440WKeypadCursor/T440WKeypadCursor.apk mode 0100644",
-            "sif /system/app/T440WKeypadCursor/T440WKeypadCursor.apk uid 0",
-            "sif /system/app/T440WKeypadCursor/T440WKeypadCursor.apk gid 0",
-            "ea_set -f /work/ctx.system.bin /system/app/T440WKeypadCursor/T440WKeypadCursor.apk security.selinux",
-            "write /work/t440w-enable-keypad.sh /system/bin/t440w-enable-keypad.sh",
-            "sif /system/bin/t440w-enable-keypad.sh mode 0100755",
-            "sif /system/bin/t440w-enable-keypad.sh uid 0",
-            "sif /system/bin/t440w-enable-keypad.sh gid 0",
-            "ea_set -f /work/ctx.system.bin /system/bin/t440w-enable-keypad.sh security.selinux",
-            "write /work/init.t440w.keypad.rc /system/etc/init/init.t440w.keypad.rc",
-            "sif /system/etc/init/init.t440w.keypad.rc mode 0100644",
-            "sif /system/etc/init/init.t440w.keypad.rc uid 0",
-            "sif /system/etc/init/init.t440w.keypad.rc gid 0",
-            "ea_set -f /work/ctx.system.bin /system/etc/init/init.t440w.keypad.rc security.selinux",
-        ]
+        commands = []
+        for directory in sorted(missing_dirs, key=lambda item: (item.count("/"), item)):
+            commands.extend(
+                [
+                    f"mkdir {directory}",
+                    f"sif {directory} mode 040755",
+                    f"sif {directory} uid 0",
+                    f"sif {directory} gid 0",
+                    f"ea_set -f /work/ctx.system.bin {directory} security.selinux",
+                ]
+            )
+        expected = {}
+        for index, (target, (source, mode)) in enumerate(sorted(sources.items())):
+            staged_name = f"payload-{index}"
+            shutil.copyfile(source, os.path.join(work, staged_name))
+            with open(source, "rb") as source_file:
+                expected[target] = source_file.read()
+            if target in existing_paths:
+                commands.append(f"rm {target}")
+            commands.extend(
+                [
+                    f"write /work/{staged_name} {target}",
+                    f"sif {target} mode {mode:07o}",
+                    f"sif {target} uid 0",
+                    f"sif {target} gid 0",
+                    f"ea_set -f /work/ctx.system.bin {target} security.selinux",
+                ]
+            )
         command_file = os.path.join(work, "debugfs.cmd")
         with open(command_file, "w") as output:
             output.write("\n".join(commands) + "\n")
@@ -343,16 +355,238 @@ def inject_keypad_system_files(system_img, keypad_apk):
             check=True,
         )
 
-    if os.path.getsize(system_img) != original_size:
-        raise SystemExit("error: keypad injection changed the raw system image size")
+    if os.path.getsize(image_path) != original_size:
+        raise SystemExit("error: injection changed the ext4 image size")
+    with open(image_path, "rb") as image:
+        reader = Ext4Reader(image)
+        for target, expected_bytes in expected.items():
+            actual = reader.read_inode_data(reader.resolve_path(target))
+            if actual != expected_bytes:
+                raise SystemExit(f"error: embedded file mismatch: {target}")
+
+
+def _is_sparse_super_group(group):
+    """Return whether an ext4 sparse-super filesystem stores a backup here."""
+    if group in (0, 1):
+        return True
+    for base in (3, 5, 7):
+        value = group
+        while value > 1 and value % base == 0:
+            value //= base
+        if value == 1:
+            return True
+    return False
+
+
+def _normalize_ext4_superblock_times(image_path):
+    """Zero variable e2fsck times in the primary and backup superblocks."""
+    with open(image_path, "r+b") as image:
+        image.seek(1024)
+        superblock = image.read(1024)
+        if len(superblock) != 1024 or superblock[56:58] != b"\x53\xef":
+            raise SystemExit(f"error: not an ext4 image: {image_path}")
+        blocks_lo = struct.unpack_from("<I", superblock, 4)[0]
+        first_data_block = struct.unpack_from("<I", superblock, 20)[0]
+        block_size = 1024 << struct.unpack_from("<I", superblock, 24)[0]
+        blocks_per_group = struct.unpack_from("<I", superblock, 32)[0]
+        ro_compat = struct.unpack_from("<I", superblock, 100)[0]
+        incompat = struct.unpack_from("<I", superblock, 96)[0]
+        if ro_compat & 0x400:
+            raise SystemExit(
+                "error: ext4 metadata_csum image needs checksum-aware normalization"
+            )
+        blocks_hi = (
+            struct.unpack_from("<I", superblock, 0x150)[0]
+            if incompat & 0x80
+            else 0
+        )
+        blocks = blocks_lo | (blocks_hi << 32)
+        groups = (
+            blocks - first_data_block + blocks_per_group - 1
+        ) // blocks_per_group
+        sparse_super = bool(ro_compat & 0x1)
+        sparse_super2 = bool(ro_compat & 0x200)
+        if sparse_super2:
+            backup_groups = {
+                struct.unpack_from("<I", superblock, 0x24C)[0],
+                struct.unpack_from("<I", superblock, 0x250)[0],
+            }
+        else:
+            backup_groups = set()
+        for group in range(groups):
+            if group == 0:
+                offset = 1024
+            else:
+                if sparse_super2 and group not in backup_groups:
+                    continue
+                if sparse_super and not sparse_super2 and not _is_sparse_super_group(group):
+                    continue
+                offset = (
+                    first_data_block + group * blocks_per_group
+                ) * block_size
+            # s_wtime and s_lastcheck are the only wall-clock fields changed
+            # by the final e2fsck. These images do not use metadata_csum.
+            image.seek(offset + 48)
+            image.write(b"\x00" * 4)
+            image.seek(offset + 64)
+            image.write(b"\x00" * 4)
+
+
+def normalize_ext4_metadata(image_path, changed_paths):
+    """Make generated ext4 metadata byte-reproducible.
+
+    debugfs and e2fsck otherwise stamp modified inodes and superblocks with the
+    current wall clock. Normalize only declared changed paths and their parent
+    directories, then verify the resulting filesystem read-only.
+    """
+    normalized = {"/"}
+    for path in changed_paths:
+        current = path
+        while current and current != "/":
+            normalized.add(current)
+            current = os.path.dirname(current)
+        normalized.add("/")
+
+    existing = []
+    with open(image_path, "rb") as image:
+        reader = Ext4Reader(image)
+        for path in sorted(normalized):
+            try:
+                reader.resolve_path(path)
+            except FileNotFoundError:
+                continue
+            existing.append(path)
+
+    image_dir = os.path.dirname(os.path.abspath(image_path))
+    image_name = os.path.basename(image_path)
+    with tempfile.TemporaryDirectory(prefix="t440w-ext4-normalize-") as work:
+        commands = []
+        for path in existing:
+            for field in ("atime", "ctime", "mtime", "crtime"):
+                commands.append(f"sif {path} {field} 0")
+        command_file = os.path.join(work, "debugfs.cmd")
+        with open(command_file, "w") as output:
+            output.write("\n".join(commands) + "\n")
+        subprocess.run(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{image_dir}:/image",
+                "-v",
+                f"{work}:/work:ro",
+                "t440w-tools:local",
+                "sh",
+                "-c",
+                (
+                    f"debugfs -w -f /work/debugfs.cmd /image/{image_name}"
+                    " >/dev/null"
+                ),
+            ],
+            check=True,
+        )
+
+    _normalize_ext4_superblock_times(image_path)
+    subprocess.run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "-v",
+            f"{image_dir}:/image:ro",
+            "t440w-tools:local",
+            "sh",
+            "-c",
+            f"e2fsck -fn /image/{image_name} >/dev/null",
+        ],
+        check=True,
+    )
+
+
+def inject_keypad_system_files(system_img, keypad_apk):
+    """Add the signed keypad APK and its idempotent boot enabler to system."""
+    sources = {
+        "/system/app/T440WKeypadCursor/T440WKeypadCursor.apk": (
+            keypad_apk,
+            0o100644,
+        ),
+        "/system/bin/t440w-enable-keypad.sh": (
+            os.path.join(
+                REPO_ROOT, "device", "t440w", "init", "t440w-enable-keypad.sh"
+            ),
+            0o100755,
+        ),
+        "/system/etc/init/init.t440w.keypad.rc": (
+            os.path.join(
+                REPO_ROOT, "device", "t440w", "init", "init.t440w.keypad.rc"
+            ),
+            0o100644,
+        ),
+    }
+    inject_ext4_files(system_img, sources)
+
+
+def apply_system_adb_profile(system_img, usb_diagnostics, unsafe_root_adb):
+    """Make the GSI-side ADB properties match the selected build profile."""
+    build_prop_path = "/system/build.prop"
+    adb_root_rc_path = "/system/system_ext/etc/init/adb_root.rc"
     with open(system_img, "rb") as image:
         reader = Ext4Reader(image)
-        for target, source in sources.items():
-            actual = reader.read_inode_data(reader.resolve_path(target))
-            with open(source, "rb") as expected_file:
-                expected = expected_file.read()
-            if actual != expected:
-                raise SystemExit(f"error: embedded keypad file mismatch: {target}")
+        build_prop = reader.read_inode_data(
+            reader.resolve_path(build_prop_path)
+        ).decode("utf-8")
+        try:
+            reader.resolve_path(adb_root_rc_path)
+            has_adb_root_rc = True
+        except FileNotFoundError:
+            has_adb_root_rc = False
+
+    controlled = {
+        "persist.sys.usb.config",
+        "persist.vendor.usb.config",
+        "ro.adb.secure",
+        "ro.debuggable",
+        "ro.force_debuggable",
+        "service.adb.root",
+    }
+    lines = [
+        line
+        for line in build_prop.splitlines()
+        if line.split("=", 1)[0] not in controlled
+    ]
+    lines.extend(
+        [
+            f"ro.debuggable={1 if unsafe_root_adb else 0}",
+            f"ro.adb.secure={0 if unsafe_root_adb else 1}",
+        ]
+    )
+    if usb_diagnostics or unsafe_root_adb:
+        lines.extend(
+            [
+                "persist.sys.usb.config=adb",
+                "persist.vendor.usb.config=adb",
+            ]
+        )
+    if unsafe_root_adb:
+        lines.append("service.adb.root=1")
+    new_build_prop = "\n".join(lines).rstrip("\n") + "\n"
+
+    with tempfile.TemporaryDirectory(prefix="t440w-adb-profile-") as work:
+        build_prop_host = os.path.join(work, "build.prop")
+        with open(build_prop_host, "w") as output:
+            output.write(new_build_prop)
+        sources = {build_prop_path: (build_prop_host, 0o100644)}
+        replace_paths = {build_prop_path}
+        if has_adb_root_rc and not unsafe_root_adb:
+            inert_rc = os.path.join(work, "adb_root.rc")
+            with open(inert_rc, "w") as output:
+                output.write(
+                    "# Disabled in the T440W release profile; use Magisk app policies.\n"
+                )
+            sources[adb_root_rc_path] = (inert_rc, 0o100644)
+            replace_paths.add(adb_root_rc_path)
+        inject_ext4_files(system_img, sources, replace_paths=replace_paths)
 
 
 def calc_partition_size_for_avb(raw_img_size):
@@ -440,10 +674,12 @@ def build_odm_android_image(
     sysext_sha,
     prod_sha,
     usb_diagnostics,
+    unsafe_root_adb,
+    selinux_mode,
     display_profile,
 ):
-    """Build odm_b_android.img with merged permissive SELinux policy, GSI sha256s,
-    Android keypad .kl files, and bring-up debugging configuration."""
+    """Build odm_b_android.img with merged SELinux policy, GSI sha256s,
+    Android keypad .kl files, required platform hooks, and optional USB."""
     with tempfile.TemporaryDirectory(prefix="t440w-odm-") as work:
         def dump_opt(img, src, dst):
             with open(img, "rb") as fh:
@@ -525,37 +761,51 @@ def build_odm_android_image(
             with open(f"{work}/prod.sha256", "wb") as f:
                 f.write(prod_sha)
 
-        # Prepare build.prop with bringup debugging properties
+        # Prepare build.prop with release-safe platform properties.
         with open(f"{work}/odm.img", "rb") as fh:
             r = Ext4Reader(fh)
             bp = r.read_inode_data(r.resolve_path("/etc/build.prop")).decode("utf-8")
+        controlled_props = {
+            "persist.sys.usb.config",
+            "persist.vendor.usb.config",
+            "ro.adb.secure",
+            "ro.debuggable",
+            "ro.force_debuggable",
+            "service.adb.root",
+        }
+        bp = "\n".join(
+            line
+            for line in bp.splitlines()
+            if line.split("=", 1)[0] not in controlled_props
+        ).rstrip("\n") + "\n"
         extra_props = []
         extra_props.extend([
             "persist.sys.phh.mainkeys=1",
             "qemu.hw.mainkeys=1",
+            "ro.adb.secure=1",
         ])
         if usb_diagnostics:
             extra_props.extend([
-                "ro.debuggable=1",
-                "ro.adb.secure=0",
                 "persist.sys.usb.config=adb",
                 "persist.vendor.usb.config=adb",
+            ])
+        if unsafe_root_adb:
+            extra_props.extend([
+                "ro.debuggable=1",
+                "ro.adb.secure=0",
                 "service.adb.root=1",
             ])
         extra_props.extend(DISPLAY_PROFILES[display_profile])
         for ep in extra_props:
             key = ep.split("=", 1)[0]
-            if key in ("persist.sys.phh.mainkeys", "qemu.hw.mainkeys"):
-                bp = re.sub(
-                    rf"^{re.escape(key)}=.*$",
-                    ep,
-                    bp,
-                    count=1,
-                    flags=re.M,
-                )
-                if f"{key}=" not in bp:
-                    bp = bp.rstrip("\n") + "\n" + ep + "\n"
-            elif f"{key}=" not in bp:
+            bp, replaced = re.subn(
+                rf"^{re.escape(key)}=.*$",
+                ep,
+                bp,
+                count=1,
+                flags=re.M,
+            )
+            if replaced == 0:
                 bp = bp.rstrip("\n") + "\n" + ep + "\n"
         with open(f"{work}/build.prop", "w") as f:
             f.write(bp)
@@ -565,20 +815,24 @@ def build_odm_android_image(
         kl_names = ["soc_matrix_keypad0.kl", "gpio-keys.kl", "pm8941_pwrkey.kl", "pm8941_resin.kl"]
         for kn in kl_names:
             shutil.copyfile(os.path.join(kl_dir, kn), f"{work}/{kn}")
+        shutil.copyfile(
+            os.path.join(REPO_ROOT, "device", "t440w", "init", "init.t440w.platform.rc"),
+            f"{work}/init.t440w.platform.rc",
+        )
+        shutil.copyfile(
+            os.path.join(
+                REPO_ROOT,
+                "device",
+                "t440w",
+                "init",
+                "t440w-force-client-composition.sh",
+            ),
+            f"{work}/t440w-force-client-composition.sh",
+        )
         if usb_diagnostics:
             shutil.copyfile(
                 os.path.join(REPO_ROOT, "device", "t440w", "init", "init.t440w.debug.rc"),
                 f"{work}/init.t440w.debug.rc",
-            )
-            shutil.copyfile(
-                os.path.join(
-                    REPO_ROOT,
-                    "device",
-                    "t440w",
-                    "init",
-                    "t440w-force-client-composition.sh",
-                ),
-                f"{work}/t440w-force-client-composition.sh",
             )
 
         # Build debugfs script to update odm.img (expanded to 348 blocks = 1,425,408 B,
@@ -621,23 +875,33 @@ def build_odm_android_image(
             "sif /usr/keylayout gid 0",
             "ea_set -f /work/ctx.kl.bin /usr/keylayout security.selinux",
         ]
+        dbg_cmds.extend([
+            "mkdir /bin",
+            "sif /bin mode 040755",
+            "sif /bin uid 0",
+            "sif /bin gid 0",
+            "ea_set -f /work/ctx.vf.bin /bin security.selinux",
+            "rm /bin/t440w-force-client-composition.sh",
+            "write /work/t440w-force-client-composition.sh /bin/t440w-force-client-composition.sh",
+            "sif /bin/t440w-force-client-composition.sh mode 0100755",
+            "sif /bin/t440w-force-client-composition.sh uid 0",
+            "sif /bin/t440w-force-client-composition.sh gid 0",
+            "ea_set -f /work/ctx.vse.bin /bin/t440w-force-client-composition.sh security.selinux",
+            "mkdir /etc/init",
+            "sif /etc/init mode 040755",
+            "sif /etc/init uid 0",
+            "sif /etc/init gid 0",
+            "ea_set -f /work/ctx.vf.bin /etc/init security.selinux",
+            "rm /etc/init/init.t440w.debug.rc",
+            "rm /etc/init/init.t440w.platform.rc",
+            "write /work/init.t440w.platform.rc /etc/init/init.t440w.platform.rc",
+            "sif /etc/init/init.t440w.platform.rc mode 0100644",
+            "sif /etc/init/init.t440w.platform.rc uid 0",
+            "sif /etc/init/init.t440w.platform.rc gid 0",
+            "ea_set -f /work/ctx.bp.bin /etc/init/init.t440w.platform.rc security.selinux",
+        ])
         if usb_diagnostics:
             dbg_cmds.extend([
-                "mkdir /bin",
-                "sif /bin mode 040755",
-                "sif /bin uid 0",
-                "sif /bin gid 0",
-                "ea_set -f /work/ctx.vf.bin /bin security.selinux",
-                "write /work/t440w-force-client-composition.sh /bin/t440w-force-client-composition.sh",
-                "sif /bin/t440w-force-client-composition.sh mode 0100755",
-                "sif /bin/t440w-force-client-composition.sh uid 0",
-                "sif /bin/t440w-force-client-composition.sh gid 0",
-                "ea_set -f /work/ctx.vf.bin /bin/t440w-force-client-composition.sh security.selinux",
-                "mkdir /etc/init",
-                "sif /etc/init mode 040755",
-                "sif /etc/init uid 0",
-                "sif /etc/init gid 0",
-                "ea_set -f /work/ctx.vf.bin /etc/init security.selinux",
                 "write /work/init.t440w.debug.rc /etc/init/init.t440w.debug.rc",
                 "sif /etc/init/init.t440w.debug.rc mode 0100644",
                 "sif /etc/init/init.t440w.debug.rc uid 0",
@@ -678,13 +942,21 @@ def build_odm_android_image(
             f.write(b"u:object_r:vendor_configs_file:s0\x00")
         with open(f"{work}/ctx.vf.bin", "wb") as f:
             f.write(b"u:object_r:vendor_file:s0\x00")
+        with open(f"{work}/ctx.vse.bin", "wb") as f:
+            f.write(b"u:object_r:vendor_shell_exec:s0\x00")
         with open(f"{work}/ctx.kl.bin", "wb") as f:
             f.write(b"u:object_r:vendor_keylayout_file:s0\x00")
 
+        policy_finish = (
+            "/usr/local/bin/setpermissive /work/policy.bin /work/precompiled_sepolicy"
+            if selinux_mode == "permissive"
+            else "cp /work/policy.bin /work/precompiled_sepolicy"
+        )
         secilc_cmd = (
             "secilc -m -M true -G -N -c 30 -o /work/policy.bin -f /dev/null "
             + " ".join(secilc_inputs)
-            + " && /usr/local/bin/setpermissive /work/policy.bin /work/precompiled_sepolicy"
+            + " && "
+            + policy_finish
             + " && e2fsck -fy /work/odm.img >/dev/null"
             + " && resize2fs /work/odm.img 338 >/dev/null"
             + " && debugfs -w -f /work/debugfs.cmd /work/odm.img >/dev/null"
@@ -715,8 +987,19 @@ def main():
     ap.add_argument(
         "--usb-diagnostics",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Install forced-ADB/root diagnostics (default: enabled)",
+        default=False,
+        help="Install authenticated forced-ADB USB fallback (default: disabled)",
+    )
+    ap.add_argument(
+        "--unsafe-root-adb",
+        action="store_true",
+        help="Bring-up only: request unauthenticated root adbd",
+    )
+    ap.add_argument(
+        "--selinux-mode",
+        choices=("enforcing", "permissive"),
+        default="enforcing",
+        help="Generated merged-policy mode (default: enforcing)",
     )
     ap.add_argument(
         "--display-profile",
@@ -725,6 +1008,8 @@ def main():
         help="Opt-in display experiment; kept separate from USB diagnostics",
     )
     args = ap.parse_args()
+    if args.unsafe_root_adb and not args.usb_diagnostics:
+        ap.error("--unsafe-root-adb requires --usb-diagnostics")
 
     # SECURITY-REVIEW: CLI tool creating output directory for user-specified output path
     os.makedirs(args.out_dir, exist_ok=True)
@@ -828,6 +1113,8 @@ def main():
         },
         "diagnostics": {
             "usb": args.usb_diagnostics,
+            "unsafe_root_adb": args.unsafe_root_adb,
+            "selinux_mode": args.selinux_mode,
             "display_profile": args.display_profile,
         },
         "keypad": {
@@ -840,7 +1127,13 @@ def main():
         output.write("\n")
     print(f">> Recorded exact input identity (sha256={source_sha256})")
 
-    # 3. Patch Generic.kl in-place for the TCL Flip 4 5G keypad
+    # 3. Apply the selected ADB profile and patch the TCL Flip 4 5G keypad.
+    apply_system_adb_profile(
+        sys_img,
+        usb_diagnostics=args.usb_diagnostics,
+        unsafe_root_adb=args.unsafe_root_adb,
+    )
+    print(">> Applied GSI-side secure ADB profile")
     patched_kl, counts = patch_generic_kl_for_t440w(generic_kl)
     overwrite_ext4_file_same_size(sys_img, "/system/usr/keylayout/Generic.kl", patched_kl)
     print(f">> Patched /system/usr/keylayout/Generic.kl in-place for T440W keypad (subs={counts})")
@@ -858,6 +1151,8 @@ def main():
         sysext_sha,
         prod_sha,
         args.usb_diagnostics,
+        args.unsafe_root_adb,
+        args.selinux_mode,
         args.display_profile,
     )
 

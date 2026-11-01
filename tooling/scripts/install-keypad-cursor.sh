@@ -7,7 +7,7 @@ OUT="${1:-$ROOT/artifacts/build/keypad-cursor}"
 APK="$OUT/keypad-cursor.apk"
 STATE="$OUT/install-state"
 PACKAGE="org.tclflip4.keypadcursor"
-COMPONENT="$PACKAGE/$PACKAGE.KeypadCursorService"
+COMPONENT="$PACKAGE/$PACKAGE.KeypadActionService"
 
 if [[ ! -r "$APK" ]]; then
     echo "error: missing APK: $APK" >&2

@@ -1,0 +1,34 @@
+diff --git a/app/src/main/java/com/austinauyeung/nyuma/c9/settings/domain/Defaults.kt b/app/src/main/java/com/austinauyeung/nyuma/c9/settings/domain/Defaults.kt
+index 4890b64..6e9ad22 100644
+--- a/app/src/main/java/com/austinauyeung/nyuma/c9/settings/domain/Defaults.kt
++++ b/app/src/main/java/com/austinauyeung/nyuma/c9/settings/domain/Defaults.kt
+@@ -33,14 +33,14 @@ object Defaults {
+         const val CURSOR_SIZE = CursorConstants.DEFAULT_SIZE
+         const val CURSOR_ACCELERATION_START = GestureConstants.DEFAULT_ACCELERATION_START
+         const val CURSOR_ACCELERATION_DURATION = GestureConstants.DEFAULT_ACCELERATION_DURATION
+-        const val GRID_ACTIVATION_KEY = KeyEvent.KEYCODE_POUND
+-        const val CURSOR_ACTIVATION_KEY = KeyEvent.KEYCODE_STAR
+-        const val SCROLL_UP_KEY = KeyEvent.KEYCODE_2
+-        const val SCROLL_DOWN_KEY = KeyEvent.KEYCODE_8
+-        const val SCROLL_LEFT_KEY = KeyEvent.KEYCODE_4
+-        const val SCROLL_RIGHT_KEY = KeyEvent.KEYCODE_6
++        const val GRID_ACTIVATION_KEY = ApplicationConstants.OVERLAY_DISABLED
++        const val CURSOR_ACTIVATION_KEY = ApplicationConstants.OVERLAY_DISABLED
++        const val SCROLL_UP_KEY = KeyEvent.KEYCODE_F1
++        const val SCROLL_DOWN_KEY = KeyEvent.KEYCODE_CALL
++        const val SCROLL_LEFT_KEY = ApplicationConstants.OVERLAY_DISABLED
++        const val SCROLL_RIGHT_KEY = ApplicationConstants.OVERLAY_DISABLED
+         val CURSOR_EDGE_BEHAVIOR = ScreenEdgeBehavior.NONE
+-        val CONTROL_SCHEME = ControlScheme.STANDARD
++        val CONTROL_SCHEME = ControlScheme.TV
+         val GESTURE_STYLE = GestureStyle.FIXED
+         const val TOGGLE_HOLD = CursorConstants.TOGGLE_HOLD
+         const val SCROLL_DURATION = GestureConstants.DEFAULT_SCROLL_DURATION
+diff --git a/app/build.gradle.kts b/app/build.gradle.kts
+index b15f5fb..c032170 100644
+--- a/app/build.gradle.kts
++++ b/app/build.gradle.kts
+@@ -9,2 +9,3 @@ android {
+     namespace = "com.austinauyeung.nyuma.c9"
+     compileSdk = 36
++    buildToolsVersion = "36.0.0"

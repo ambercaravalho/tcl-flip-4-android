@@ -1,18 +1,14 @@
-# Bring-up-only USB fallback for the TCL Flip 4 5G.
+# Optional bring-up USB fallback for the TCL Flip 4 5G.
 #
 # The stock vendor image selects the AIDL USB gadget HAL. A generic system
 # image can boot before that HAL receives a usable function configuration,
 # leaving the USB port unenumerated. Force the vendor's supported legacy
-# ConfigFS path and an unauthenticated ADB-only composition so early bring-up
-# logs remain available.
+# ConfigFS path when explicitly requested. Authentication remains controlled
+# by ro.adb.secure; this file does not enable root adbd.
 
 on post-fs-data
     setprop persist.sys.usb.config adb
     setprop persist.vendor.usb.config adb
-    # TrebleDroid's vndk.rc copies this PHH setting over qemu.hw.mainkeys.
-    # Set both before zygote/system_server starts so no virtual nav bar exists.
-    setprop persist.sys.phh.mainkeys 1
-    setprop qemu.hw.mainkeys 1
 
 on zygote-start
     setprop vendor.usb.use_gadget_hal 0
@@ -20,20 +16,3 @@ on zygote-start
     setprop persist.vendor.usb.config adb
     setprop sys.usb.config none
     setprop sys.usb.config adb
-
-# The private SPI bridge requires one full-height, client-composed target.
-# Reapply the proven SurfaceFlinger control after every SurfaceFlinger start;
-# boot_completed is a fallback in case service registration outlives startup.
-service t440w_force_client_composition /odm/bin/t440w-force-client-composition.sh
-    class core
-    user root
-    group root
-    seclabel u:r:su:s0
-    disabled
-    oneshot
-
-on property:init.svc.surfaceflinger=running
-    start t440w_force_client_composition
-
-on property:sys.boot_completed=1
-    start t440w_force_client_composition

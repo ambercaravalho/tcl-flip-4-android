@@ -83,3 +83,21 @@ adb shell 'test -w /sys/kernel/tracing/kprobe_events && echo writable'
 
 Root and trace access are observations only if these checks succeed on the
 running boot.
+
+For a release profile, `adb root` may return no useful text; the authoritative
+gate is that the subsequent identity remains UID 2000, `service.adb.root=0`,
+and shell `su` is denied. SELinux must be enforcing, tracing must be off with
+the `nop` tracer and no kprobes, both bounded helpers must have stopped
+normally, and no navigation-bar inset may exist.
+
+If Magisk Manager is carried outside package-scanned directories, install it
+normally only after all image readbacks and the successful boot:
+
+```bash
+adb shell pm install -r -g \
+  /system/etc/t440w/release/Magisk-v31.1.apk
+```
+
+Confirm its package path is under `/data/app`; a system-app path is a release
+failure. Test application root as a separate deny/grant/cleanup gate and leave
+no test policy or probe installed.

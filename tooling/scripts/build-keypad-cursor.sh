@@ -47,7 +47,7 @@ javac \
     -Xlint:all \
     -bootclasspath "$ANDROID_JAR" \
     -d "$CLASSES" \
-    "$APP/src/org/tclflip4/keypadcursor/KeypadCursorService.java"
+    "$APP/src/org/tclflip4/keypadcursor/"*.java
 
 "$BUILD_TOOLS/aapt2" compile \
     --dir "$APP/res" \
@@ -58,8 +58,8 @@ javac \
     --manifest "$APP/AndroidManifest.xml" \
     --min-sdk-version 34 \
     --target-sdk-version 34 \
-    --version-code 1 \
-    --version-name 1.0 \
+    --version-code 2 \
+    --version-name 1.1 \
     "$COMPILED_RESOURCES" \
     -o "$UNSIGNED"
 

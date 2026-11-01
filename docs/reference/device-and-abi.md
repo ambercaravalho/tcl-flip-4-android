@@ -75,17 +75,22 @@ The validated physical-keypad profile additionally maps:
 - left/right softkeys `139`/`158` -> inert `F1`/`F2`;
 - `231` remains `CALL`.
 
-The baked `org.tclflip4.keypadcursor` AccessibilityService consumes the
-reserved keys needed for global behavior. `CONTACTS` toggles a black-arrow
-cursor; the D-pad moves it, center clicks, and keys `139`/`231` page up/down
-only while cursor mode is active. `ENVELOPE` launches Messaging.
+The baked version-code-2 `org.tclflip4.keypadcursor` AccessibilityService
+consumes the reserved keys needed for global behavior. `ENVELOPE` launches
+Messaging and `CONTACTS` delegates cursor toggle to C9. C9 supplies the cursor,
+D-pad movement, center click, and conditional page up/down behavior.
 
 TrebleDroid's `vndk.rc` copies `persist.sys.phh.mainkeys` to
-`qemu.hw.mainkeys`. Both must be `1` before framework startup to omit the
-unusable on-screen navigation bar. The ODM init hook enforces that ordering.
+`qemu.hw.mainkeys`. The ODM init hook sets both to `1` before framework startup
+to omit the unusable on-screen navigation bar. On the accepted final boot,
+`qemu.hw.mainkeys` was no longer visible after startup while the navigation-bar
+inset remained absent; post-boot validation must inspect the actual inset and
+physical panel rather than rely only on the late property value.
 
 Evidence:
-[`2026-11-01-09-physical-keypad-navigation.md`](../findings/2026-11-01-09-physical-keypad-navigation.md).
+[`2026-11-01-09-physical-keypad-navigation.md`](../findings/2026-11-01-09-physical-keypad-navigation.md)
+and
+[`2026-11-01-10-rooted-release-stack.md`](../findings/2026-11-01-10-rooted-release-stack.md).
 
 ## Debugging caveat
 
@@ -109,3 +114,14 @@ to this locked/green device.
 
 Evidence:
 [`2026-11-01-03-gsi-adb-root.md`](../findings/2026-11-01-03-gsi-adb-root.md).
+
+## Accepted release security profile
+
+The rooted release uses an enforcing policy, authenticated non-root adbd, and
+Magisk 31.1 in patched `init_boot_b`. Unknown applications and ADB shell are
+denied by default; application root requires an explicit Manager grant.
+Manager itself must be installed under `/data/app`, not scanned as a system
+application. Trace collection is disabled in the final state.
+
+Evidence:
+[`2026-11-01-10-rooted-release-stack.md`](../findings/2026-11-01-10-rooted-release-stack.md).

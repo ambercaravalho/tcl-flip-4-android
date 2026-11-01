@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "components": [
+    {
+      "id": "magisk",
+      "version": "31.1",
+      "filename": "Magisk-v31.1.apk",
+      "url": "https://github.com/topjohnwu/Magisk/releases/download/v31.1/Magisk-v31.1.apk",
+      "size": 10679283,
+      "sha256": "89cefac0a318afa39fb3880c45c87b036c05bc1ebf02a7a715b7f8d7c26ac6e7",
+      "certificate_sha256": "b4cb83b4dad99f997dbe872f013aa16c14eec41d167021f371f7e1330f273ee6",
+      "source": "https://github.com/topjohnwu/Magisk",
+      "source_commit": "0972f67d97f9b6302b67c5171283330c74114b4a",
+      "license": "GPL-3.0"
+    },
+    {
+      "id": "c9",
+      "version": "3.0.4",
+      "filename": "c9-v3.0.4-app-release.apk",
+      "url": "https://github.com/austinauyeung/C9/releases/download/v3.0.4/c9-v3.0.4-app-release.apk",
+      "size": 1882333,
+      "sha256": "10bfad9e36de88a68d9b5942419a0b79601092017c37b6c849653c7c0048fc85",
+      "certificate_sha256": "89d9321c1803d0521204e42080787b5670896e811345174ebf2759c0c8614263",
+      "source": "https://github.com/austinauyeung/C9",
+      "source_commit": "cda4cb7029a1a38c5f980e516c4edd1803bef0d5",
+      "t440w_build_sha256": "0fdaf4646a5bdc7ac85853aeacbe48fc71f2326d5c70594f85958c8fda7f28f2",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "microg-services",
+      "version": "0.3.17.252432",
+      "filename": "com.google.android.gms-252432034.apk",
+      "url": "https://github.com/microg/GmsCore/releases/download/v0.3.17.252432/com.google.android.gms-252432034.apk",
+      "size": 108113833,
+      "sha256": "e5e6cba078bdec812b5450599350e5c1a12c8b7438da5bf77123af170f8c1a35",
+      "certificate_sha256": "9bd06727e62796c0130eb6dab39b73157451582cbd138e86c468acc395d14165",
+      "source": "https://github.com/microg/GmsCore",
+      "source_commit": "32bc8954ff872d0e1a05ddfae81561b6dbecef69",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "microg-companion",
+      "version": "0.3.17.252432",
+      "filename": "com.android.vending-84022634.apk",
+      "url": "https://github.com/microg/GmsCore/releases/download/v0.3.17.252432/com.android.vending-84022634.apk",
+      "size": 4210169,
+      "sha256": "9b8616011cc8f026bcbbe094df850794abb9d6d9f23214d7a8f8c4d1033ea012",
+      "certificate_sha256": "9bd06727e62796c0130eb6dab39b73157451582cbd138e86c468acc395d14165",
+      "source": "https://github.com/microg/GmsCore",
+      "source_commit": "32bc8954ff872d0e1a05ddfae81561b6dbecef69",
+      "license": "Apache-2.0"
+    },
+    {
+      "id": "aurora-store",
+      "version": "4.8.4-fdroid",
+      "filename": "com.aurora.store_76.apk",
+      "url": "https://f-droid.org/repo/com.aurora.store_76.apk",
+      "size": 9360088,
+      "sha256": "fd9c75d90d0f4a7c132b9b4a5a2cf1992a45e03b8d8ff988b7dcfbc0db2c4d11",
+      "certificate_sha256": "5c83c7672b929955dc0a1db89a5e6ae4389e2eae7ec939956041694e5815f532",
+      "source": "https://gitlab.com/AuroraOSS/AuroraStore",
+      "source_commit": "ad3d349edce82e119ba239f3a07b3afe028abd19",
+      "license": "GPL-3.0",
+      "distribution_note": "Official F-Droid distribution; selected because the upstream GitLab upload requires an authenticated browser session."
+    }
+  ],
+  "integration_configs": {
+    "microg": {
+      "source": "https://github.com/lineageos4microg/android_vendor_partner_gms",
+      "source_commit": "8b49146a50de2c7185b63efb53412c972492d7cf",
+      "license": "Apache-2.0 AND GPL-3.0-or-later"
+    }
+  }
+}
