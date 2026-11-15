@@ -435,5 +435,118 @@ class InstallerTests(unittest.TestCase):
             install_release.require_same_device(backup, live)
 
 
+IDENTITY = {
+    "hwid": "0x002980e100420071",
+    "chip_serial": "0xbcbcc701",
+    "emmc_serial": 841155977,
+    "total_blocks": 61079552,
+    "block_size": 512,
+}
+IDENTITY_LOG = (
+    "main - Mode detected: sahara\n"
+    "HWID:              0x002980e100420071 (MSM_ID:0x002980e1,OEM_ID:0x0042,"
+    "MODEL_ID:0x0071)\n"
+    "firehose - INFO: Chip serial num: 3166488321 (0xbcbcc701)\n"
+    "firehose - total_blocks:61079552\n"
+    "firehose - block_size:512\n"
+    "firehose - serial_num:841155977\n"
+)
+# A reconnect to an already-running programmer prints no identity block.
+STALE_LOG = "main - Mode detected: firehose\nParsing Lun 0:\n"
+
+
+class IdentityReuseTests(unittest.TestCase):
+    def _probe(
+        self,
+        log_text: str,
+        *,
+        known_identity: dict[str, object] | None,
+    ) -> dict[str, object]:
+        def fake_edl(
+            args: list[str], loader: Path, log_path: Path, *, capture: bool = False
+        ) -> str:
+            del loader, log_path
+            if args[0] == "printgpt":
+                self.assertTrue(capture)
+                return log_text
+            Path(args[3]).write_bytes(b"\0" * (34 * 512))
+            return ""
+
+        manifest = {
+            "device": {
+                "hwid": "0x002980e100420071",
+                "total_sectors": 61079552,
+                "sector_size": 512,
+            }
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                mock.patch.object(
+                    install_release, "run_edl", side_effect=fake_edl
+                ),
+                mock.patch.object(install_release, "read_gpt", return_value=[]),
+                mock.patch.object(install_release, "verify_reference_gpt"),
+                mock.patch.object(
+                    install_release, "sha256_file", return_value="a" * 64
+                ),
+                mock.patch.object(
+                    install_release,
+                    "gpt_geometry_sha256",
+                    return_value="b" * 64,
+                ),
+            ):
+                return install_release.probe_live(
+                    manifest,
+                    [],
+                    Path(directory) / "loader.bin",
+                    Path(directory),
+                    known_identity=known_identity,
+                )
+
+    def test_reconnect_reuses_identity_captured_at_session_start(self) -> None:
+        identity = self._probe(STALE_LOG, known_identity=IDENTITY)
+        for field in install_lib.IDENTITY_FIELDS:
+            self.assertEqual(identity[field], IDENTITY[field])
+        self.assertEqual(identity["primary_gpt_sha256"], "a" * 64)
+        self.assertEqual(identity["gpt_geometry_sha256"], "b" * 64)
+
+    def test_stale_log_without_captured_identity_is_rejected(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            self._probe(STALE_LOG, known_identity=None)
+        self.assertIn("incomplete HWID/storage identity", str(raised.exception))
+
+    def test_reconnect_rejects_changed_identity(self) -> None:
+        changed = {**IDENTITY, "chip_serial": "0xdeadbeef"}
+        with self.assertRaises(SystemExit) as raised:
+            self._probe(IDENTITY_LOG, known_identity=changed)
+        self.assertIn("changed during the install", str(raised.exception))
+
+    def test_fresh_log_still_parses_with_captured_identity(self) -> None:
+        identity = self._probe(IDENTITY_LOG, known_identity=IDENTITY)
+        for field in install_lib.IDENTITY_FIELDS:
+            self.assertEqual(identity[field], IDENTITY[field])
+
+    def test_captured_identity_file_is_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "identity.json"
+            path.write_text(json.dumps(IDENTITY), encoding="utf-8")
+            self.assertEqual(install_lib.load_identity_file(path), IDENTITY)
+            install_lib.check_edl_identity(
+                install_lib.load_identity_file(path),
+                {
+                    "device": {
+                        "hwid": "0x002980e100420071",
+                        "total_sectors": 61079552,
+                        "sector_size": 512,
+                    }
+                },
+            )
+            path.write_text(
+                json.dumps({**IDENTITY, "hwid": "0x0"}), encoding="utf-8"
+            )
+            with self.assertRaises(SystemExit):
+                install_lib.load_identity_file(path)
+
+
 if __name__ == "__main__":
     unittest.main()

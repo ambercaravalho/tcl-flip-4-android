@@ -28,8 +28,14 @@ tooling/scripts/edl rf "$OUT" --loader="$LOADER" --memory=emmc --skipresponse | 
 
 echo
 echo ">> Verifying image, GPT CRCs, device identity, and SHA-256 ..."
-.venv/bin/python tooling/scripts/record-backup.py \
-  "$OUT" evidence/logs/backup.log
+record_args=("$OUT" evidence/logs/backup.log)
+# The programmer only prints its identity block on the first connection after a
+# fresh EDL entry; the installer captures it and passes it here when the dump
+# itself reconnected to an already-running programmer.
+if [[ -n "${T440W_IDENTITY_JSON:-}" ]]; then
+  record_args+=(--identity-json "$T440W_IDENTITY_JSON")
+fi
+.venv/bin/python tooling/scripts/record-backup.py "${record_args[@]}"
 
 echo
 echo "Done. Keep this image somewhere safe (it contains personal data)."

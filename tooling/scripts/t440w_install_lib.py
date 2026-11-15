@@ -275,10 +275,23 @@ def verify_reference_gpt(
             )
 
 
-def parse_edl_identity(
-    output: str, manifest: dict[str, Any]
-) -> dict[str, Any]:
-    expected_hwid = manifest["device"]["hwid"].lower()
+IDENTITY_FIELDS = (
+    "hwid",
+    "chip_serial",
+    "emmc_serial",
+    "total_blocks",
+    "block_size",
+)
+
+
+def parse_edl_identity_block(output: str) -> dict[str, Any] | None:
+    """Return the identity block printed at EDL connect, or None.
+
+    HWID is printed during the Sahara handshake and the storage fields in the
+    programmer's startup log, so only the first client connection after a fresh
+    EDL entry carries them. A reconnect to an already-running programmer sees
+    neither and returns None here.
+    """
     hwid_match = re.search(
         r"(?i)\bhwid\b[^0-9a-f]*(0x[0-9a-f]{16})", output
     )
@@ -295,33 +308,65 @@ def parse_edl_identity(
     if not all(
         (hwid_match, chip_match, emmc_match, blocks_match, block_size_match)
     ):
-        raise SystemExit("error: incomplete HWID/storage identity in EDL output")
-    assert hwid_match is not None
-    assert chip_match is not None
-    assert emmc_match is not None
-    assert blocks_match is not None
-    assert block_size_match is not None
-    hwid = hwid_match.group(1).lower()
-    total_blocks = int(blocks_match.group(1))
-    block_size = int(block_size_match.group(1))
+        return None
+    return {
+        "hwid": hwid_match.group(1).lower(),
+        "chip_serial": chip_match.group(1).lower(),
+        "emmc_serial": int(emmc_match.group(1)),
+        "total_blocks": int(blocks_match.group(1)),
+        "block_size": int(block_size_match.group(1)),
+    }
+
+
+def check_edl_identity(
+    identity: dict[str, Any], manifest: dict[str, Any]
+) -> None:
+    expected_hwid = manifest["device"]["hwid"].lower()
+    hwid = identity.get("hwid")
     if hwid != expected_hwid:
         raise SystemExit(f"error: live HWID is {hwid}, expected {expected_hwid}")
+    total_blocks = identity.get("total_blocks")
     if total_blocks != manifest["device"]["total_sectors"]:
         raise SystemExit(
             f"error: live storage has {total_blocks} sectors, expected "
             f"{manifest['device']['total_sectors']}"
         )
+    block_size = identity.get("block_size")
     if block_size != manifest["device"]["sector_size"]:
         raise SystemExit(
             f"error: live block size is {block_size}, expected {SECTOR_SIZE}"
         )
-    return {
-        "hwid": hwid,
-        "chip_serial": chip_match.group(1).lower(),
-        "emmc_serial": int(emmc_match.group(1)),
-        "total_blocks": total_blocks,
-        "block_size": block_size,
-    }
+
+
+def load_identity_file(path: Path) -> dict[str, Any]:
+    """Read an identity captured earlier in the same EDL session."""
+    value = load_json(path)
+    identity = {field: value.get(field) for field in IDENTITY_FIELDS}
+    if not isinstance(identity["hwid"], str) or not re.fullmatch(
+        r"0x[0-9a-f]{16}", identity["hwid"]
+    ):
+        raise SystemExit(f"error: invalid hwid in identity file: {path}")
+    if not isinstance(identity["chip_serial"], str) or not re.fullmatch(
+        r"0x[0-9a-f]+", identity["chip_serial"]
+    ):
+        raise SystemExit(f"error: invalid chip_serial in identity file: {path}")
+    for field in ("emmc_serial", "total_blocks", "block_size"):
+        require_positive_int(identity[field], f"identity file {field}")
+    return identity
+
+
+def parse_edl_identity(
+    output: str, manifest: dict[str, Any]
+) -> dict[str, Any]:
+    identity = parse_edl_identity_block(output)
+    if identity is None:
+        raise SystemExit(
+            "error: incomplete HWID/storage identity in EDL output; the "
+            "programmer was already running, so reset the phone (hold Power "
+            "for ~10s) and enter EDL again"
+        )
+    check_edl_identity(identity, manifest)
+    return identity
 
 
 def backup_receipt_path(backup: Path) -> Path:

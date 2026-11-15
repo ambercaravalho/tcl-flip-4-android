@@ -6,7 +6,7 @@ The T440W uses the signed programmer at
 
 ## Non-negotiable protocol rule
 
-- Read commands (`r`, `rs`, `rf`, `rl`, `printgpt`) use
+- Read commands (`r`, `rs`, `rf`, `rl`, `printgpt`, `getactiveslot`) use
   `--skipresponse`.
 - Write and erase commands (`w`, `ws`, `wf`, `wl`, `e`) do not use
   `--skipresponse`.
@@ -23,6 +23,18 @@ reboot. For `vbmeta_system_b` and `vbmeta_b`, use raw-sector writes at LBAs
 Evidence:
 [`2026-07-17-01-root-project-inheritance.md`](../findings/2026-07-17-01-root-project-inheritance.md)
 and [`2026-10-31-03-first-android-flash.md`](../findings/2026-10-31-03-first-android-flash.md).
+
+## Where the identity block appears
+
+`HWID` is printed during the Sahara handshake, and `Chip serial num`,
+`firehose - serial_num`, `firehose - total_blocks`, and `firehose - block_size`
+in the programmer's startup log. Both exist only for the first client
+connection after a fresh EDL entry: a client that reconnects to an
+already-running programmer sees `Mode detected: firehose` and no identity
+lines. The installer therefore captures the identity on its first connection,
+reuses it for the target-backup and flash steps, and hands it to `backup.sh`
+through `T440W_IDENTITY_JSON` so the dump receipt can still be bound when `rf`
+runs on a reconnected programmer.
 
 ## Vendored client changes
 

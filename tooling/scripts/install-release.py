@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import struct
@@ -417,55 +418,6 @@ def verify_reference_gpt(
             )
 
 
-def parse_edl_identity(
-    output: str, manifest: dict[str, Any]
-) -> dict[str, Any]:
-    expected_hwid = manifest["device"]["hwid"].lower()
-    hwid_match = re.search(
-        r"(?i)\bhwid\b[^0-9a-f]*(0x[0-9a-f]{16})", output
-    )
-    chip_match = re.search(
-        r"(?i)Chip serial num:\s*\d+\s*\((0x[0-9a-f]+)\)", output
-    )
-    emmc_match = re.search(r"(?im)^\s*firehose - serial_num:(\d+)\s*$", output)
-    blocks_match = re.search(
-        r"(?im)^\s*firehose - total_blocks:(\d+)\s*$", output
-    )
-    block_size_match = re.search(
-        r"(?im)^\s*firehose - block_size:(\d+)\s*$", output
-    )
-    if not all(
-        (hwid_match, chip_match, emmc_match, blocks_match, block_size_match)
-    ):
-        raise SystemExit("error: incomplete HWID/storage identity in EDL output")
-    assert hwid_match is not None
-    assert chip_match is not None
-    assert emmc_match is not None
-    assert blocks_match is not None
-    assert block_size_match is not None
-    hwid = hwid_match.group(1).lower()
-    total_blocks = int(blocks_match.group(1))
-    block_size = int(block_size_match.group(1))
-    if hwid != expected_hwid:
-        raise SystemExit(f"error: live HWID is {hwid}, expected {expected_hwid}")
-    if total_blocks != manifest["device"]["total_sectors"]:
-        raise SystemExit(
-            f"error: live storage has {total_blocks} sectors, expected "
-            f"{manifest['device']['total_sectors']}"
-        )
-    if block_size != manifest["device"]["sector_size"]:
-        raise SystemExit(
-            f"error: live block size is {block_size}, expected {SECTOR_SIZE}"
-        )
-    return {
-        "hwid": hwid,
-        "chip_serial": chip_match.group(1).lower(),
-        "emmc_serial": int(emmc_match.group(1)),
-        "total_blocks": total_blocks,
-        "block_size": block_size,
-    }
-
-
 def backup_receipt_path(backup: Path) -> Path:
     return backup.with_name(f"{backup.name}.receipt.json")
 
@@ -573,6 +525,8 @@ def probe_live(
     assets: list[dict[str, Any]],
     loader: Path,
     log_dir: Path,
+    *,
+    known_identity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     log_dir.mkdir(parents=True, exist_ok=True)
     output = run_edl(
@@ -581,7 +535,27 @@ def probe_live(
         log_dir / "printgpt.log",
         capture=True,
     )
-    identity = parse_edl_identity(output, manifest)
+    if known_identity is None:
+        identity = install.parse_edl_identity(output, manifest)
+    else:
+        captured = install.parse_edl_identity_block(output)
+        if captured is None:
+            print(
+                "OK  reusing the identity captured at the start of this EDL "
+                "session (the programmer was already running)"
+            )
+            identity = {
+                field: known_identity[field] for field in install.IDENTITY_FIELDS
+            }
+        else:
+            install.check_edl_identity(captured, manifest)
+            for field in install.IDENTITY_FIELDS:
+                if captured[field] != known_identity.get(field):
+                    raise SystemExit(
+                        f"error: connected phone {field} changed during the "
+                        "install; no range was modified"
+                    )
+            identity = captured
 
     with tempfile.TemporaryDirectory(prefix="t440w-live-gpt-") as temp:
         gpt_path = Path(temp) / "primary-gpt.img"
@@ -656,6 +630,8 @@ def backup_targets(
     loader: Path,
     full_backup: Path,
     output: Path | None,
+    *,
+    known_identity: dict[str, Any] | None = None,
 ) -> Path:
     full_state = verify_full_backup(full_backup, manifest, assets)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -673,7 +649,7 @@ def backup_targets(
         raise SystemExit(f"error: target backup path is not empty: {backup_dir}")
     backup_dir.mkdir(parents=True, exist_ok=True)
     live_identity = probe_live(
-        manifest, assets, loader, backup_dir / "logs"
+        manifest, assets, loader, backup_dir / "logs", known_identity=known_identity
     )
     require_same_device(full_state, live_identity)
     slot = get_active_slot(loader, backup_dir / "logs" / "get-active-slot.log")
@@ -849,6 +825,8 @@ def flash(
     loader: Path,
     full_backup: Path,
     target_backup: Path,
+    *,
+    known_identity: dict[str, Any] | None = None,
 ) -> None:
     release = manifest["release"]
     full_state = verify_full_backup(full_backup, manifest, assets)
@@ -859,7 +837,9 @@ def flash(
     if flash_dir.exists() and not flash_dir.is_dir():
         raise SystemExit(f"error: flash path is not a directory: {flash_dir}")
     preflight_logs = target_backup / f"preflight-{release}"
-    live_identity = probe_live(manifest, assets, loader, preflight_logs)
+    live_identity = probe_live(
+        manifest, assets, loader, preflight_logs, known_identity=known_identity
+    )
     require_same_device(full_state, live_identity)
     if (
         live_identity["primary_gpt_sha256"]
@@ -1192,7 +1172,15 @@ def guided_install(
 
     wait_for_edl()
     probe_dir = REPO_ROOT / "evidence/logs" / f"install-{release}-probe"
-    probe_live(manifest, assets, loader, probe_dir)
+    identity = probe_live(manifest, assets, loader, probe_dir)
+    # The programmer only prints the identity block on the first client
+    # connection after a fresh EDL entry, so persist it for the backup script
+    # and reuse it for the later, reconnecting steps of this session.
+    identity_path = guided_session_path(release).with_name("identity.json")
+    install.write_json(
+        identity_path,
+        {field: identity[field] for field in install.IDENTITY_FIELDS},
+    )
     slot = get_active_slot(loader, probe_dir / "get-active-slot.log")
     if slot != "b":
         raise SystemExit(
@@ -1216,6 +1204,7 @@ def guided_install(
             [str(REPO_ROOT / "tooling/scripts/backup.sh"), str(full_backup)],
             cwd=REPO_ROOT,
             check=True,
+            env={**os.environ, "T440W_IDENTITY_JSON": str(identity_path)},
         )
     elif not full_backup.is_file() or not receipt.is_file():
         raise SystemExit(
@@ -1248,7 +1237,12 @@ def guided_install(
             )
     else:
         target_backup = backup_targets(
-            manifest, assets, loader, full_backup, None
+            manifest,
+            assets,
+            loader,
+            full_backup,
+            None,
+            known_identity=identity,
         )
         session["target_backup"] = str(target_backup.relative_to(REPO_ROOT))
         save_guided_session(session)
@@ -1260,6 +1254,7 @@ def guided_install(
         loader,
         full_backup,
         target_backup,
+        known_identity=identity,
     )
     session["flash_complete"] = True
     save_guided_session(session)

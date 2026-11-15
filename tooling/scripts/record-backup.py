@@ -15,6 +15,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("image", type=Path)
     parser.add_argument("identity_log", type=Path)
+    parser.add_argument(
+        "--identity-json",
+        type=Path,
+        help="identity captured on the first connection of this EDL session",
+    )
     parser.add_argument("--force", action="store_true")
     return parser.parse_args()
 
@@ -50,9 +55,19 @@ def main() -> int:
         raise SystemExit("error: primary and backup GPT geometry differ")
     install.verify_reference_gpt(primary, manifest, assets)
     geometry_digest = install.gpt_geometry_sha256(primary)
-    identity = install.parse_edl_identity(
-        identity_log.read_text(encoding="utf-8", errors="replace"), manifest
+    identity = install.parse_edl_identity_block(
+        identity_log.read_text(encoding="utf-8", errors="replace")
     )
+    if identity is None:
+        if args.identity_json is None:
+            raise SystemExit(
+                "error: incomplete HWID/storage identity in EDL identity log; "
+                "the programmer was already running when the dump started. "
+                "Pass --identity-json with the identity captured on the first "
+                "connection of this EDL session."
+            )
+        identity = install.load_identity_file(args.identity_json.resolve())
+    install.check_edl_identity(identity, manifest)
 
     receipt_path = install.backup_receipt_path(image)
     if receipt_path.exists() and not args.force:
